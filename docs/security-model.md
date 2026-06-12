@@ -2,85 +2,156 @@
 
 ## Security goal
 
-OpenDeck Browser must protect user data, repository information, access tokens, local files, and maintainer workflows.
+OpenDeck Browser must protect user data, repository information, credentials,
+local paths, and maintainer workflows. Security controls are part of the
+foundation architecture and must be present before GitHub or AI integrations
+are added.
 
-Because the app is designed for open-source maintainers, it may eventually handle sensitive repository metadata, security alerts, pull request contents, and authentication tokens.
+## Trust boundaries
+
+The initial application has three trust zones:
+
+1. The React application running in the system WebView.
+2. The Tauri IPC boundary.
+3. Rust code with native filesystem access.
+
+The WebView is treated as less trusted than Rust. Every IPC input is validated
+in Rust, and every IPC response is treated as unknown and validated by the
+frontend before use.
+
+Repository content, URLs, issue text, pull request text, and future API
+responses must be treated as untrusted data.
 
 ## Sensitive data
 
-OpenDeck Browser should treat the following as sensitive:
+OpenDeck Browser treats the following as sensitive:
 
-- GitHub tokens
-- User account information
-- Repository metadata from private repositories
-- Pull request contents from private repositories
-- Issue contents from private repositories
-- Local file paths
-- AI prompts containing private code or private repository data
-- Logs that may include credentials or URLs
+- GitHub and future provider credentials.
+- User account information.
+- Private repository, pull request, and issue data.
+- Local file paths.
+- AI prompts containing private repository data.
+- Logs and errors that may include credentials, URLs, or private content.
 
-## Security principles
+The foundation build does not create an application data file. A later
+workspace and settings implementation may persist only non-sensitive settings
+and metadata-only workspace names.
 
-- Do not store tokens in plaintext.
-- Do not store secrets in localStorage.
-- Do not commit `.env` files.
-- Do not log secrets.
-- Do not send repository data to AI providers without clear user action.
-- Do not execute untrusted code automatically.
-- Validate all data crossing the frontend/backend boundary.
-- Keep Tauri permissions minimal.
-- Treat external URLs as untrusted.
-- Prefer explicit user confirmation for sensitive actions.
+## Foundation controls
+
+### Tauri capabilities
+
+- Use one local capability assigned only to the `main` window.
+- Enable only the core permissions required for application and window
+  operation.
+- Do not enable shell, process, filesystem, HTTP, dialog, or opener plugins.
+- Do not expose Tauri APIs globally.
+- Keep the Content Security Policy restricted to bundled application assets.
+
+The foundation Rust code performs no application filesystem access. The
+frontend receives no generic filesystem command.
+
+### IPC
+
+- Expose no application commands in the foundation build.
+- Add only narrow, named commands with typed input and output in later changes.
+- Validate identifiers, workspace names, settings values, and schema versions.
+- Do not expose generic command dispatch, arbitrary paths, or executable input.
+- Return structured error codes and safe messages.
+- Do not include raw local paths, serialized input, or backtraces in frontend
+  errors.
+
+### Future persistence
+
+- Store non-sensitive data in a versioned JSON document under the operating
+  system application-config directory.
+- Serialize writes to prevent concurrent file corruption.
+- Use temporary files and atomic replacement.
+- Preserve corrupt data for recovery without exposing its path in the UI.
+- Never overwrite a document with a newer unsupported schema.
+- Never use `localStorage` for application data or secrets.
+
+### WebView and content
+
+- Load only bundled application content in the main WebView.
+- Do not embed arbitrary remote pages.
+- Escape untrusted text before rendering.
+- Add URL validation before external links are introduced.
+- Do not execute scripts, commands, hooks, or repository code from untrusted
+  content.
+
+### Logging and status messages
+
+- Never log credentials or complete command payloads.
+- Keep UI status entries in memory only and limit them to 100 entries.
+- Use predefined, sanitized status text.
+- Do not place private repository data, local paths, or native error details in
+  status messages.
 
 ## Initial threat model
 
-### Token leakage
+### Credential leakage
 
-Risk: GitHub tokens may be exposed through logs, localStorage, screenshots, debug output, or accidental commits.
+Risk: Future credentials may be exposed through logs, frontend state,
+screenshots, errors, or plaintext persistence.
 
 Mitigation:
-- Use secure storage when available.
-- Never log tokens.
-- Mask tokens in UI.
-- Avoid storing credentials in frontend state longer than necessary.
+
+- Keep credentials out of the future non-sensitive application data model.
+- Add operating-system secure storage before GitHub authentication.
+- Keep authenticated network operations in Rust.
+- Mask credentials in any future account UI.
 
 ### Unsafe IPC
 
-Risk: The frontend may call backend commands with unsafe input.
+Risk: Compromised or malformed frontend code may invoke native commands with
+unsafe data.
 
 Mitigation:
-- Validate all command inputs.
-- Keep command APIs narrow.
-- Avoid generic command execution.
-- Avoid exposing filesystem access without strict scope.
 
-### Malicious repository content
+- Keep the command surface narrow.
+- Validate all command inputs in Rust.
+- Avoid generic filesystem, URL, and process commands.
+- Apply minimal window capabilities.
 
-Risk: Issues, pull requests, markdown, URLs, and repository metadata may contain malicious content.
+### Malicious remote content
 
-Mitigation:
-- Escape rendered content.
-- Validate external links.
-- Do not execute scripts from repository content.
-- Open external links safely.
-
-### AI privacy risk
-
-Risk: Private repository data may be sent to an AI provider without user awareness.
+Risk: Future repository content may include malicious markup, URLs, or prompt
+injection.
 
 Mitigation:
-- AI features must be manual in the MVP.
-- Show a privacy warning before sending content.
-- Clearly show what content will be summarized.
-- Allow users to disable AI features.
 
-## MVP security requirements
+- Treat remote content as data.
+- Render text safely and validate external links.
+- Never execute repository content.
+- Require explicit user action before future AI transmission.
 
-Before the first alpha release:
+### Local data corruption
 
-- Document credential handling.
-- Avoid plaintext token storage.
-- Add warning for AI summaries.
-- Avoid automatic code execution.
-- Avoid broad filesystem permissions.
-- Add SECURITY.md.
+Risk: Interrupted writes or incompatible versions may destroy workspace and
+settings data.
+
+Mitigation:
+
+- Validate the full document before accepting it.
+- Write atomically.
+- Back up corrupt data.
+- Refuse to overwrite unsupported future schemas.
+
+## Requirements before GitHub integration
+
+- Choose an authentication method and minimum read-only scopes.
+- Add operating-system-backed credential storage.
+- Define logout and credential-revocation behavior.
+- Keep tokens and authenticated requests in Rust.
+- Add centralized external URL validation.
+- Confirm that errors, logs, and screenshots cannot expose credentials.
+
+## Requirements before AI integration
+
+- Keep AI actions manual.
+- Show exactly what content will be sent.
+- Display a privacy warning before transmission.
+- Require explicit user confirmation for private repository data.
+- Allow AI features to be disabled.
+- Do not allow repository content to trigger tools or native commands.
