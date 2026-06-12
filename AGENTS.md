@@ -1,16 +1,18 @@
 # AGENTS.md
 
-## Project
+## Project And Language
 
-OpenDeck Browser is an open-source browser/workspace for open-source maintainers, developers, and contributors.
+OpenDeck Browser is an open-source browser/workspace for open-source
+maintainers, developers, and contributors.
 
-The project helps users manage repositories, issues, pull requests, documentation, releases, and security workflows from a unified desktop interface.
+The project helps users manage repositories, issues, pull requests,
+documentation, releases, and security workflows from a unified desktop
+interface.
 
-## Main goal
+The main goal is to build a secure, modular, local-first desktop application
+using Tauri, React, TypeScript, and Rust.
 
-Build a secure, modular, local-first desktop application using Tauri, React, TypeScript, and Rust.
-
-## Non-goals
+Non-goals:
 
 - Do not build a custom browser engine.
 - Do not store user tokens in plaintext.
@@ -19,65 +21,113 @@ Build a secure, modular, local-first desktop application using Tauri, React, Typ
 - Do not add unnecessary dependencies.
 - Do not implement large unrelated features without updating docs first.
 
-## Engineering rules
+All repository files, documentation, code comments, commit messages, pull
+request descriptions, and Codex-facing project content must be in English.
+User-facing conversation may be in Spanish or another language.
 
-- Keep changes small and reviewable.
-- Prefer modular code.
-- Update documentation when behavior changes.
-- Add tests for business logic.
-- Use TypeScript types strictly.
-- Validate all data crossing frontend/backend boundaries.
-- Treat GitHub tokens as sensitive.
-- Use secure storage for credentials when available.
-- Do not hardcode secrets.
+## Scope And Workflow
+
+- Work in small, modular, reviewable substeps.
+- Do not broaden scope without explicit approval.
+- Do not implement an entire roadmap phase in one task.
+- Use `/plan` before non-trivial, cross-module, architectural, or
+  security-sensitive implementation.
+- Use `/goal` only for a clearly approved substep with known validation and a
+  clear stopping condition.
+- Use `/review` for storage, IPC, Tauri commands, authentication, tokens, AI
+  payloads, security, and release work.
+- Before non-trivial implementation, read `docs/vision.md`, `docs/mvp.md`,
+  `docs/architecture.md`, and `docs/security-model.md`.
+- Update documentation when behavior or architecture changes.
+- Add focused tests for business logic and boundary validation.
+- Use strict TypeScript and explicit Rust types.
+- Do not silently add dependencies. Explain and obtain approval for any needed
+  dependency.
+
+## Architecture Boundaries
+
+- React owns presentation and UI state only. It must not own local persistence
+  or privileged operations.
+- Rust/Tauri owns validation, local persistence, managed state, and privileged
+  operations.
+- Persisted app data uses schema version 1.
+- `nextWorkspaceSequence` is internal Rust state and must never be exposed to
+  React or included in frontend DTOs.
+- Read and write app data only through the approved Rust JSON storage service
+  for `app-data.json`.
+- `AppState` owns the validated cache and serializes load-modify-write
+  operations. Do not bypass it from commands.
+- Tauri commands must remain narrow, named, typed, validated, and limited to
+  safe DTOs.
+- Frontend services must call specific commands through a private
+  `invoke<unknown>` helper and runtime-validate every success and rejection.
+- Do not export a generic invoke wrapper.
+- React UI must not call raw Tauri `invoke` directly.
+
+## Security Guardrails
+
+- Do not use `localStorage` or `sessionStorage` for app data, tokens,
+  credentials, secrets, prompts, repository data, or user data.
+- Do not store credentials, tokens, repository data, prompts, paths, or secrets
+  in `app-data.json`.
+- Frontend-facing and user-facing errors must not expose raw filesystem paths,
+  command payloads, serialized input, lock details, backtraces, or native
+  diagnostics.
+- Require an explicit plan and approval before adding plugins, permissions,
+  capabilities, remote content, external links, or broader native access.
+- Do not add filesystem plugin permissions, shell or process permissions, the
+  opener or HTTP plugin, updater behavior, remote content, or broad
+  capabilities without that approval.
+- Do not introduce GitHub tokens until a dedicated credential-storage design
+  is approved.
+- Do not implement AI features until privacy, consent, and payload-review
+  behavior is designed and approved.
+- Do not hardcode or commit secrets.
 - Do not commit `.env` files.
+- Never log credentials or expose tokens in logs, screenshots, or errors.
+- Do not execute untrusted code or repository content automatically.
 
-## Security rules
+## Validation And Review
 
-- Never log credentials.
-- Never store secrets in localStorage.
-- Never expose tokens in screenshots, logs, or error messages.
-- Validate all URLs before opening them externally.
-- Keep Tauri permissions minimal.
-- Do not add filesystem access without clear justification.
-- Do not send private repository data to AI providers without explicit user action.
+Run the checks relevant to the files changed.
 
-## Codex workflow
+Frontend changes:
 
-Before implementation:
+```text
+npm test
+npm run check
+npm run build
+```
 
-- Read `docs/vision.md`.
-- Read `docs/mvp.md`.
-- Read `docs/architecture.md`.
-- Read `docs/security-model.md`.
-- Use `/plan` before large changes.
+Rust changes:
 
-During implementation:
+```text
+cargo test --manifest-path src-tauri/Cargo.toml
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+```
 
-- Explain major architecture choices.
-- Keep commits focused.
-- Do not silently add dependencies.
-- If a dependency is needed, explain why.
-- Do not expand the MVP without updating documentation first.
+Documentation and final diff checks:
 
-Before finishing:
+```text
+git diff --check
+```
 
-- Run lint if available.
-- Run tests if available.
-- Summarize changed files.
-- Mention known limitations.
-- Mention any commands that could not be run.
+For sensitive changes, include a short audit covering the command surface,
+permissions, persistence, data exposure, and dependency changes.
 
-## Review guidelines
+Finish each task summary with:
 
-Codex reviews should focus on:
+- Changed files.
+- Validation results.
+- Known limitations.
+- Commands that could not be run.
+
+Reviews must prioritize:
 
 - Security regressions.
-- Token handling.
-- Unsafe Tauri commands.
-- Unsafe URL handling.
-- Missing validation.
-- Missing tests for business logic.
+- Unsafe IPC or Tauri commands.
+- Storage correctness and recovery behavior.
+- Missing frontend/backend boundary validation.
+- Sensitive-data exposure.
 - Unnecessary dependencies.
-- Behavior changes without documentation.
-- Large changes that should be split into smaller pull requests.
+- Scope that is too large for one reviewable task.
