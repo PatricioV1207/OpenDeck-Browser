@@ -8,11 +8,13 @@ open-source maintainers, developers, and contributors.
 The repository currently contains the foundation build:
 
 - A single-window Tauri 2 desktop shell.
-- A minimal React and TypeScript frontend built with Vite.
+- A static React and TypeScript application layout built with Vite.
+- Separate sidebar, top bar, workspace, future tab area, and status components.
 - A minimal Rust backend with no application IPC commands.
 - A restrictive Content Security Policy and an empty main-window capability.
 
-Workspace, settings, tabs, GitHub, and AI features are not implemented yet.
+The visible layout is static. Workspace CRUD, settings persistence, tabs,
+internal views, GitHub, and AI features are not implemented yet.
 See [`docs/mvp.md`](docs/mvp.md) for the planned MVP scope.
 
 ## Prerequisites

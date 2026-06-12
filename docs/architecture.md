@@ -10,7 +10,10 @@ handle credentials or network access.
 The current foundation is intentionally small:
 
 - One `main` window.
-- One static React placeholder screen.
+- One static React application shell.
+- Separate sidebar, top bar, workspace, future tab placeholder, and status
+  components.
+- Plain CSS organized into design tokens, global rules, and layout rules.
 - A minimal Rust runner with no application IPC commands.
 - One main-window capability with no granted permissions.
 - No plugins, persistence, remote content, or native integrations.
@@ -35,8 +38,9 @@ follow-up changes.
 
 ## Frontend responsibilities
 
-The current React frontend renders only the foundation placeholder. As features
-are introduced, the frontend will be responsible for:
+The current React frontend renders a stateless application shell. Layout
+components live under `components/layout`, while shell composition lives under
+`app`. As features are introduced, the frontend will be responsible for:
 
 - Rendering the application shell and internal views.
 - Managing the active tab, open tabs, bootstrap state, and session status
@@ -166,11 +170,12 @@ cross-feature state belongs in `state`, and IPC access belongs exclusively in
 2. Configure the main window, restrictive CSP, and minimal capability.
 3. Implement and test the Rust domain and storage boundary.
 4. Add typed frontend IPC wrappers and runtime validation.
-5. Build the shell and singleton tab system.
-6. Add Home, Projects, Settings, and About views.
-7. Connect workspaces and settings to Rust persistence.
-8. Add the bounded, non-persisted status panel.
-9. Run native, frontend, security, and manual smoke checks.
+5. Build the static application shell.
+6. Add the singleton tab system.
+7. Add Home, Projects, Settings, and About views.
+8. Connect workspaces and settings to Rust persistence.
+9. Replace the static status placeholder with bounded session status state.
+10. Run native, frontend, security, and manual smoke checks.
 
 ## Deferred decisions
 
