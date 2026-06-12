@@ -12,12 +12,18 @@ The repository currently contains the foundation build:
 - Separate sidebar, top bar, workspace, tab strip, and status components.
 - Frontend-only singleton tabs that reset when the application restarts.
 - Structured static Home, Projects, Settings, and About views.
-- A minimal Rust backend with no application IPC commands.
+- A Rust-owned, schema-versioned app-data domain for non-sensitive settings and
+  metadata-only workspaces.
+- Strict JSON storage under the operating-system application-config directory,
+  with bounded reads, validation, corrupt-data recovery, and atomic writes.
+- Managed Rust state that lazily loads and serializes app-data mutations.
+- Seven narrow Tauri commands with safe DTOs, notices, and error codes.
+- Typed frontend service wrappers that validate every unknown IPC response.
 - A restrictive Content Security Policy and an empty main-window capability.
 
-The internal views provide product scaffolding only. Workspace CRUD, settings
-persistence, live project data, GitHub, and AI features are not implemented
-yet.
+The app-data boundary is implemented but is not connected to React state or the
+internal views yet. Workspace CRUD UI, settings UI behavior, live project data,
+GitHub, and AI features remain deferred.
 See [`docs/mvp.md`](docs/mvp.md) for the planned MVP scope.
 
 ## Prerequisites
@@ -63,21 +69,22 @@ Build the frontend:
 npm run build
 ```
 
-Run the dependency-free reducer tests:
+Run the dependency-free frontend tests:
 
 ```text
 npm test
 ```
 
-Check Rust formatting and compilation:
+Run the Rust tests and strict Clippy checks:
 
 ```text
-cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
-cargo check --manifest-path src-tauri/Cargo.toml
+cargo test --manifest-path src-tauri/Cargo.toml
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 ```
 
 ## Security
 
 Read [`docs/security-model.md`](docs/security-model.md) before adding native
-commands, filesystem access, external URLs, authentication, or remote content.
+commands, expanding filesystem access, external URLs, authentication, or remote
+content.
 Report vulnerabilities according to [`SECURITY.md`](SECURITY.md).

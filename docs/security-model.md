@@ -33,9 +33,11 @@ OpenDeck Browser treats the following as sensitive:
 - AI prompts containing private repository data.
 - Logs and errors that may include credentials, URLs, or private content.
 
-The foundation build does not create an application data file. A later
-workspace and settings implementation may persist only non-sensitive settings
-and metadata-only workspace names.
+The implemented app-data boundary may persist only non-sensitive settings and
+metadata-only workspace records. It does not store credentials, tokens,
+repository content, AI prompts, local project paths, or secrets. Setup does not
+create the data file; a missing file remains absent until the first successful
+mutation or corruption recovery.
 
 ## Foundation controls
 
@@ -48,27 +50,55 @@ and metadata-only workspace names.
 - Do not expose Tauri APIs globally.
 - Keep the Content Security Policy restricted to bundled application assets.
 
-The foundation Rust code performs no application filesystem access. The
-frontend receives no generic filesystem command.
+The main capability grants no permissions. No shell, process, filesystem, HTTP,
+dialog, opener, updater, tray, or background-process plugin is enabled.
+
+Rust performs direct, narrowly scoped filesystem access only for
+`app-data.json`, same-directory temporary files, and timestamped corrupt
+backups under the application-config directory resolved by Tauri. The frontend
+receives no generic filesystem command, path, directory picker, or plugin
+permission.
 
 ### IPC
 
-- Expose no application commands in the foundation build.
-- Add only narrow, named commands with typed input and output in later changes.
+- Expose only `get_app_info`, `load_app_data`, `create_workspace`,
+  `rename_workspace`, `delete_workspace`, `set_active_workspace`, and
+  `update_settings`.
+- Register the commands through one invoke handler.
+- Use strict typed mutation inputs with camelCase fields and unknown-field
+  rejection.
 - Validate identifiers, workspace names, settings values, and schema versions.
 - Do not expose generic command dispatch, arbitrary paths, or executable input.
-- Return structured error codes and safe messages.
+- Return DTOs that omit internal sequence state and contain no sensitive data.
+- Return structured error codes, fixed safe messages, and bounded notices.
 - Do not include raw local paths, serialized input, or backtraces in frontend
   errors.
+- Treat frontend IPC successes and rejections as `unknown`, then validate exact
+  fields and domain invariants before returning typed values.
+- Keep Tauri `invoke` private to command-specific service wrappers.
+- Do not retain malformed raw IPC values in frontend errors.
 
-### Future persistence
+The frontend wrappers are not connected to React state or views yet.
+
+### App-data persistence
 
 - Store non-sensitive data in a versioned JSON document under the operating
   system application-config directory.
-- Serialize writes to prevent concurrent file corruption.
-- Use temporary files and atomic replacement.
-- Preserve corrupt data for recovery without exposing its path in the UI.
-- Never overwrite a document with a newer unsupported schema.
+- Reject symlinks and non-regular primary entries.
+- Limit input and output to 1 MiB.
+- Reject unknown and missing persisted fields and validate the full domain
+  snapshot.
+- Serialize load-modify-write operations through managed Rust state.
+- Validate draft mutations and update the cache only after persistence
+  succeeds.
+- Use flushed and synchronized same-directory temporary files and atomic
+  replacement.
+- Preserve corrupt bytes in timestamped backups before replacing the primary
+  file with defaults.
+- Never overwrite a document with an unsupported nonnegative integer schema
+  version.
+- Return safe error categories without exposing paths, JSON, temporary names,
+  or native diagnostics.
 - Never use `localStorage` for application data or secrets.
 
 ### WebView and content
@@ -137,6 +167,23 @@ Mitigation:
 - Write atomically.
 - Back up corrupt data.
 - Refuse to overwrite unsupported future schemas.
+
+## Current guardrail audit
+
+The Step 23 app-data boundary was audited with these findings:
+
+- The main-window capability remains empty and assigned only to `main`.
+- The restrictive CSP and `withGlobalTauri: false` remain unchanged.
+- No Tauri plugin or broad permission was added.
+- Native filesystem access is limited to the app-config app-data files.
+- The public command surface is limited to the seven named app-data commands.
+- No arbitrary file, path, URL, process, shell, or network input is accepted.
+- No credentials, repository content, prompts, paths, or secrets exist in the
+  persisted schema or frontend DTOs.
+- No `localStorage` or `sessionStorage` use exists.
+- No remote content, external-link behavior, GitHub implementation, or AI
+  implementation exists.
+- The typed frontend wrappers are not connected to React components.
 
 ## Requirements before GitHub integration
 
