@@ -84,6 +84,11 @@ validated in-memory data, fixed safe failure categories, and validated notice
 codes. A single-flight promise prevents duplicate startup invokes during React
 Strict Mode remounts.
 
+Projects consumes only the provider state. Its read-only presentation maps safe
+provider failure codes to fixed Projects-owned text, never renders backend
+messages, and displays only workspace name, canonical ID, validated timestamps,
+and active status. It exposes no commands, controls, links, or retry behavior.
+
 ### App-data persistence
 
 - Store non-sensitive data in a versioned JSON document under the operating
@@ -190,6 +195,8 @@ The Step 23 app-data boundary was audited with these findings:
 - No remote content, external-link behavior, GitHub implementation, or AI
   implementation exists.
 - React uses only the typed `load_app_data` wrapper through `AppDataProvider`.
+- Projects reads validated workspace metadata from `AppDataProvider` and
+  presents it without mutation controls.
 - Workspace and settings mutations remain disconnected from React components.
 - Persisted presentation settings are loaded but are not applied to the UI.
 
