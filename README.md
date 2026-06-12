@@ -11,12 +11,13 @@ The repository currently contains the foundation build:
 - A React and TypeScript application layout built with Vite.
 - Separate sidebar, top bar, workspace, tab strip, and status components.
 - Frontend-only singleton tabs that reset when the application restarts.
+- Structured static Home, Projects, Settings, and About views.
 - A minimal Rust backend with no application IPC commands.
 - A restrictive Content Security Policy and an empty main-window capability.
 
-Home, Projects, Settings, and About currently render placeholder panels.
-Workspace CRUD, settings persistence, real internal views, GitHub, and AI
-features are not implemented yet.
+The internal views provide product scaffolding only. Workspace CRUD, settings
+persistence, live project data, GitHub, and AI features are not implemented
+yet.
 See [`docs/mvp.md`](docs/mvp.md) for the planned MVP scope.
 
 ## Prerequisites

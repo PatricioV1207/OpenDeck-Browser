@@ -13,14 +13,17 @@ The current foundation is intentionally small:
 - One React application shell.
 - Separate sidebar, top bar, workspace, tab strip, and status components.
 - Frontend-only singleton tabs managed by React context and a reducer.
+- Feature-owned static Home, Projects, Settings, and About views.
+- Small shared presentation components for view headers, sections, status
+  labels, and information cards.
 - Plain CSS organized into design tokens, global rules, and layout rules.
 - A minimal Rust runner with no application IPC commands.
 - One main-window capability with no granted permissions.
 - No plugins, persistence, remote content, or native integrations.
 
 GitHub and AI integrations are not part of the foundation implementation.
-Workspaces, settings, and real internal view content remain deferred to focused
-follow-up changes.
+Workspace behavior, settings persistence, and live internal view data remain
+deferred to focused follow-up changes.
 
 ## Architecture principles
 
@@ -41,7 +44,10 @@ follow-up changes.
 The current React frontend renders the application shell and manages
 non-persisted internal tabs. Layout components live under `components/layout`,
 tab state and controls live under `features/tabs`, and shell composition lives
-under `app`. As features are introduced, the frontend will be responsible for:
+under `app`. Static internal view content is owned by the corresponding feature
+folder, while reusable view presentation components live under
+`components/ui`. As features are introduced, the frontend will be responsible
+for:
 
 - Rendering the application shell and internal views.
 - Managing the active tab, open tabs, bootstrap state, and session status
@@ -175,10 +181,12 @@ cross-feature state belongs in `state`, and IPC access belongs exclusively in
 4. Add typed frontend IPC wrappers and runtime validation.
 5. Build the static application shell.
 6. Add the singleton tab system.
-7. Replace tab placeholders with Home, Projects, Settings, and About views.
-8. Connect workspaces and settings to Rust persistence.
-9. Replace the static status placeholder with bounded session status state.
-10. Run native, frontend, security, and manual smoke checks.
+7. Add structured static Home, Projects, Settings, and About views.
+8. Replace static view scaffolding with focused workspace and settings
+   behavior.
+9. Connect workspaces and settings to Rust persistence.
+10. Replace the static status placeholder with bounded session status state.
+11. Run native, frontend, security, and manual smoke checks.
 
 ## Deferred decisions
 

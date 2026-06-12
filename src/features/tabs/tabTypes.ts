@@ -5,7 +5,6 @@ export interface TabDefinition {
   label: string;
   initial: string;
   pinned: boolean;
-  placeholder: string;
 }
 
 export interface TabState {
