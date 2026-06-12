@@ -14,3 +14,4 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
+time = { version = "0.3", features = ["formatting", "parsing"] }
