@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use serde::{Deserialize, Serialize};
 use time::{format_description::well_known::Rfc3339, OffsetDateTime, UtcOffset};
 
 pub const APP_DATA_SCHEMA_VERSION: u32 = 1;
@@ -8,7 +9,8 @@ pub const MAX_WORKSPACE_NAME_CHARS: usize = 80;
 
 const WORKSPACE_ID_PREFIX: &str = "workspace-";
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum ColorMode {
     #[default]
     System,
@@ -16,7 +18,8 @@ pub enum ColorMode {
     Dark,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AppSettings {
     color_mode: ColorMode,
     sidebar_collapsed: bool,
@@ -62,7 +65,8 @@ impl SettingsPatch {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Workspace {
     id: String,
     name: String,
@@ -88,7 +92,8 @@ impl Workspace {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AppData {
     schema_version: u32,
     next_workspace_sequence: u64,
