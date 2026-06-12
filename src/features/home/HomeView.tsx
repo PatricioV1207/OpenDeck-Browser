@@ -30,13 +30,13 @@ export function HomeView() {
             </p>
           </InfoCard>
           <InfoCard
-            title="Native integrations"
-            status="Not enabled"
-            tone="protected"
+            title="Local app data"
+            status="Ready"
+            tone="ready"
           >
             <p>
-              No application commands, credentials, filesystem access, or
-              remote services are active in this build.
+              The validated Rust app-data boundary now loads non-sensitive
+              settings and workspace metadata during startup.
             </p>
           </InfoCard>
         </div>
@@ -75,8 +75,8 @@ export function HomeView() {
       </ViewSection>
 
       <p className="view-disclaimer">
-        Product workflows and live project data are not implemented in this
-        foundation view.
+        Loaded app data is not connected to product controls or live project
+        workflows in this foundation view.
       </p>
     </div>
   );

@@ -78,7 +78,11 @@ permission.
 - Keep Tauri `invoke` private to command-specific service wrappers.
 - Do not retain malformed raw IPC values in frontend errors.
 
-The frontend wrappers are not connected to React state or views yet.
+The React app-data provider calls only the `load_app_data` wrapper. Mutation
+wrappers remain disconnected from React views. Startup results are reduced to
+validated in-memory data, fixed safe failure categories, and validated notice
+codes. A single-flight promise prevents duplicate startup invokes during React
+Strict Mode remounts.
 
 ### App-data persistence
 
@@ -115,6 +119,8 @@ The frontend wrappers are not connected to React state or views yet.
 - Never log credentials or complete command payloads.
 - Keep UI status entries in memory only and limit them to 100 entries.
 - Use predefined, sanitized status text.
+- Map known app-data notice codes to fixed frontend-owned text; do not render
+  arbitrary notice messages.
 - Do not place private repository data, local paths, or native error details in
   status messages.
 
@@ -183,7 +189,9 @@ The Step 23 app-data boundary was audited with these findings:
 - No `localStorage` or `sessionStorage` use exists.
 - No remote content, external-link behavior, GitHub implementation, or AI
   implementation exists.
-- The typed frontend wrappers are not connected to React components.
+- React uses only the typed `load_app_data` wrapper through `AppDataProvider`.
+- Workspace and settings mutations remain disconnected from React components.
+- Persisted presentation settings are loaded but are not applied to the UI.
 
 ## Requirements before GitHub integration
 

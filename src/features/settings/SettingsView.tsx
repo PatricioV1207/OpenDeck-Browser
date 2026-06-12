@@ -10,14 +10,15 @@ const settingSections = [
     items: [
       {
         name: "Color mode",
-        detail: "System, light, and dark preferences will be considered later.",
+        detail:
+          "The stored system, light, or dark preference loads at startup but is not applied yet.",
         status: "Not available yet",
         tone: "planned" as const,
       },
       {
         name: "Sidebar presentation",
         detail:
-          "The compact rail is responsive today; a saved preference is not implemented.",
+          "The stored sidebar preference loads at startup but does not change the responsive layout yet.",
         status: "Not available yet",
         tone: "planned" as const,
       },
@@ -26,12 +27,12 @@ const settingSections = [
   {
     title: "Workspace behavior",
     description:
-      "Workspace state does not exist yet, so startup and selection preferences are descriptive only.",
+      "Workspace metadata loads into memory, but startup and selection controls remain descriptive only.",
     items: [
       {
         name: "Active workspace",
         detail:
-          "A future workspace model may remember a selected metadata-only project.",
+          "A stored active workspace can load at startup but is not shown or editable here.",
         status: "Not available yet",
         tone: "planned" as const,
       },
@@ -73,7 +74,7 @@ export function SettingsView() {
       <ViewHeader
         eyebrow="Settings"
         title="Preferences will stay explicit, local, and reviewable."
-        summary="This view previews the categories OpenDeck Browser expects to support. Nothing here is interactive or persisted in the foundation build."
+        summary="Persisted settings now load into memory during startup. This view remains descriptive and does not apply or update them."
         status="Placeholder view"
       />
 
@@ -98,7 +99,7 @@ export function SettingsView() {
       ))}
 
       <p className="view-disclaimer">
-        No preferences are editable or saved in this version.
+        Loaded preferences are not editable or applied in this version.
       </p>
     </div>
   );

@@ -49,7 +49,9 @@ export function AboutView() {
           </div>
           <div>
             <dt>Native application commands</dt>
-            <dd>None enabled</dd>
+            <dd>
+              App-data loading enabled; feature mutations are not connected
+            </dd>
           </div>
         </dl>
       </ViewSection>
