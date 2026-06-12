@@ -17,13 +17,19 @@ The current foundation is intentionally small:
 - Small shared presentation components for view headers, sections, status
   labels, and information cards.
 - Plain CSS organized into design tokens, global rules, and layout rules.
-- A minimal Rust runner with no application IPC commands.
+- A Rust-owned domain model for schema-versioned settings and metadata-only
+  workspaces.
+- Strict JSON storage and managed Rust state for serialized app-data access.
+- Seven narrow Tauri commands registered through one invoke handler.
+- Typed frontend DTOs, runtime guards, and command-specific service wrappers.
 - One main-window capability with no granted permissions.
-- No plugins, persistence, remote content, or native integrations.
+- No Tauri plugins, remote content, credential storage, or network
+  integrations.
 
 GitHub and AI integrations are not part of the foundation implementation.
-Workspace behavior, settings persistence, and live internal view data remain
-deferred to focused follow-up changes.
+The app-data boundary exists but is not connected to React state. Workspace and
+settings controls, live project data, and user-facing persistence behavior
+remain deferred to focused follow-up changes.
 
 ## Architecture principles
 
@@ -41,21 +47,33 @@ deferred to focused follow-up changes.
 
 ## Frontend responsibilities
 
-The current React frontend renders the application shell and manages
-non-persisted internal tabs. Layout components live under `components/layout`,
-tab state and controls live under `features/tabs`, and shell composition lives
-under `app`. Static internal view content is owned by the corresponding feature
-folder, while reusable view presentation components live under
-`components/ui`. As features are introduced, the frontend will be responsible
-for:
+The React frontend renders the application shell and manages non-persisted
+internal tabs. Layout components live under `components/layout`, tab state and
+controls live under `features/tabs`, and shell composition lives under `app`.
+Static internal view content is owned by the corresponding feature folder,
+while reusable view presentation components live under `components/ui`.
+
+Current frontend responsibilities include:
 
 - Rendering the application shell and internal views.
-- Managing the active tab, open tabs, bootstrap state, and session status
-  messages.
-- Mirroring persisted data returned by Rust.
-- Calling Rust only through typed wrappers in `services/tauri`.
-- Validating unknown IPC responses before storing or rendering them.
-- Presenting safe, user-facing errors without native implementation details.
+- Managing open and active tabs in session memory.
+
+The app-data IPC boundary is implemented under `types` and `services/tauri`:
+
+- Public DTO types describe app info, settings, workspaces, notices, and safe
+  command errors.
+- Seven command-specific wrappers call a private `invoke<unknown>` helper.
+- Successful and rejected values are validated before typed data or errors are
+  returned.
+- Exact object fields, schema version, workspace invariants, timestamps,
+  notices, and error code/field combinations are checked at runtime.
+- `AppCommandError` retains only validated safe fields.
+- `IpcContractError` identifies the command and contract phase without
+  retaining the raw IPC value.
+
+The wrappers are not imported by React components yet. A later frontend state
+layer will own bootstrap state, mirror validated app data, expose mutations to
+views, and present safe user-facing errors.
 
 React context and reducers are sufficient for the foundation. A third-party
 state-management library is not required.
@@ -68,20 +86,79 @@ The frontend must not:
 - Make authenticated GitHub requests.
 - Render arbitrary remote pages inside the application WebView.
 
-## Rust and Tauri responsibilities
+## App-data domain
 
-The current Rust backend starts the Tauri application and exposes no application
-commands. Future native features will make Rust responsible for:
+Rust owns the canonical version-1 app-data model:
 
-- Resolving the application-specific configuration directory.
-- Loading and atomically writing versioned application data.
-- Validating command inputs and enforcing domain invariants.
-- Serializing writes through managed application state.
-- Returning structured errors with safe error codes and messages.
-- Providing application metadata to the frontend.
-- Owning future credential storage and authenticated network integrations.
+```text
+AppData
+├─ schemaVersion: 1
+├─ nextWorkspaceSequence: positive integer
+├─ settings
+│  ├─ colorMode: system | light | dark
+│  ├─ sidebarCollapsed: boolean
+│  └─ statusPanelVisible: boolean
+├─ workspaces
+│  ├─ id: workspace-{positive integer}
+│  ├─ name
+│  ├─ createdAt: RFC 3339 UTC
+│  └─ updatedAt: RFC 3339 UTC
+└─ activeWorkspaceId: string | null
+```
 
-The planned application command surface is:
+`nextWorkspaceSequence` is persisted internally to prevent identifier reuse,
+but it is omitted from frontend DTOs. Workspace names are trimmed, contain
+between 1 and 80 Unicode characters, contain no control characters, and are
+unique ignoring case. At most 1,000 workspaces may exist. Timestamps are UTC,
+and `updatedAt` cannot precede `createdAt`.
+
+Creation allocates a sequential ID and activates the new workspace. Deleting
+the active workspace clears the selection. A real rename updates `updatedAt`;
+an exact trimmed no-op rename does not.
+
+## JSON storage
+
+`JsonAppDataStorage` receives the Tauri-resolved application-config directory
+and owns `app-data.json` within that directory:
+
+- Missing directories and files return defaults without creating anything.
+- Existing primary entries must be regular files; symlinks and other file types
+  are rejected.
+- Reads are limited to 1 MiB plus one detection byte.
+- JSON uses strict camelCase persisted fields, rejects unknown or missing
+  fields, and validates the complete domain model.
+- Unsupported nonnegative integer schema versions are left untouched.
+- Malformed JSON, invalid schema-version shapes, and invalid schema-1 data are
+  preserved byte-for-byte in a timestamped corrupt backup before defaults
+  replace the primary file.
+- Saves validate first, produce pretty JSON with one trailing newline, enforce
+  the 1 MiB output limit, and use a flushed and synchronized same-directory
+  temporary file for atomic replacement.
+
+Only non-sensitive settings and metadata-only workspace records belong in this
+file. Credentials, tokens, repository content, prompts, local project paths,
+and secrets are excluded.
+
+## Managed Rust state
+
+`AppState` owns an optional validated cache behind a mutex:
+
+- Setup registers the state without loading data or creating a directory.
+- The first load or mutation reads storage and caches the validated snapshot.
+- Later loads use the cache; external file changes are intentionally ignored
+  until restart.
+- Mutations clone the cache, apply pure domain logic, validate, and persist the
+  draft while holding the serialization lock.
+- Domain failures perform no write and leave the cache unchanged.
+- Save failures leave the previous cache unchanged.
+- Identical mutation results skip persistence.
+- Recovery notices are returned only by the operation that triggered loading
+  and are not cached.
+- A poisoned mutex becomes a safe state-unavailable failure.
+
+## Tauri command boundary
+
+The registered application command surface is:
 
 - `get_app_info`
 - `load_app_data`
@@ -91,46 +168,26 @@ The planned application command surface is:
 - `set_active_workspace`
 - `update_settings`
 
-These commands are not implemented in the foundation build. No generic
-filesystem, shell, process, HTTP, dialog, or opener command is exposed.
+Mutation commands use strict camelCase input structs with unknown-field
+rejection and delegate to `AppState`. Responses expose safe DTOs only.
+Application data responses contain `schemaVersion`, settings, workspaces,
+`activeWorkspaceId`, and notices; they do not expose
+`nextWorkspaceSequence`.
 
-## Planned application state
+Command failures use stable codes: `validation`, `not_found`, `conflict`,
+`storage`, `unsupported_schema`, and `internal`. Messages are fixed and do not
+include input, paths, lock details, backtraces, or native diagnostics. A
+corrupt-data recovery notice remains attached when a later operation fails.
+No generic filesystem, shell, process, HTTP, dialog, opener, or command
+dispatch API is exposed.
 
-The later workspace and settings implementation will use a versioned document:
-
-```text
-PersistedAppData
-├─ schemaVersion: 1
-├─ settings
-│  ├─ colorMode: system | light | dark
-│  ├─ sidebarCollapsed: boolean
-│  └─ statusPanelVisible: boolean
-├─ workspaces
-│  └─ id and name
-└─ activeWorkspaceId: string | null
-```
-
-Workspace IDs are generated by Rust as sequential opaque local identifiers.
-Workspace names are trimmed, contain between 1 and 80 characters, and cannot
-contain control characters.
+## Session state
 
 Tabs are session state and are not persisted. Home is always open, first, and
 cannot be closed. Opening another internal view appends a singleton tab or
 focuses its existing tab. Closing an active tab selects the right neighbor,
 then the left neighbor, then Home. Status messages will also remain session
 state when implemented.
-
-## Planned storage behavior
-
-- A missing data file produces the default document.
-- A valid schema version is loaded and validated.
-- A corrupt document is preserved under a timestamped backup name before
-  defaults are written.
-- A newer unsupported schema is never overwritten and produces a blocking
-  compatibility error.
-- Writes use a temporary file followed by atomic replacement.
-- Native errors returned to the frontend do not include local paths or
-  serialized command input.
 
 ## Suggested structure
 
@@ -173,20 +230,14 @@ belong in `components/ui`, shell components belong in `components/layout`,
 cross-feature state belongs in `state`, and IPC access belongs exclusively in
 `services/tauri`.
 
-## Implementation order
+## Next implementation order
 
-1. Establish the Tauri 2, React, and TypeScript project.
-2. Configure the main window, restrictive CSP, and minimal capability.
-3. Implement and test the Rust domain and storage boundary.
-4. Add typed frontend IPC wrappers and runtime validation.
-5. Build the static application shell.
-6. Add the singleton tab system.
-7. Add structured static Home, Projects, Settings, and About views.
-8. Replace static view scaffolding with focused workspace and settings
-   behavior.
-9. Connect workspaces and settings to Rust persistence.
-10. Replace the static status placeholder with bounded session status state.
-11. Run native, frontend, security, and manual smoke checks.
+1. Add a React app-data provider with explicit loading, ready, and error states.
+2. Load the validated snapshot during frontend bootstrap.
+3. Connect metadata-only workspace behavior to the Projects view.
+4. Connect non-sensitive settings behavior to the Settings view.
+5. Replace the static status placeholder with bounded session status state.
+6. Run native, frontend, security, and manual desktop smoke checks.
 
 ## Deferred decisions
 
