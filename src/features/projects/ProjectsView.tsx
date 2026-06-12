@@ -21,7 +21,8 @@ export function ProjectsView() {
         <h2 id="projects-empty-title">No projects yet</h2>
         <p>
           Project creation and selection will arrive in a focused workspace
-          implementation step. This view does not store or discover anything.
+          implementation step. This view does not create, edit, or select
+          loaded workspace records.
         </p>
       </section>
 
@@ -62,7 +63,7 @@ export function ProjectsView() {
         </div>
         <div>
           <dt>Persistence</dt>
-          <dd>Not enabled</dd>
+          <dd>Backend ready; project controls are not connected</dd>
         </div>
       </dl>
     </div>

@@ -22,14 +22,16 @@ The current foundation is intentionally small:
 - Strict JSON storage and managed Rust state for serialized app-data access.
 - Seven narrow Tauri commands registered through one invoke handler.
 - Typed frontend DTOs, runtime guards, and command-specific service wrappers.
+- A React app-data provider that performs one load-only startup request and
+  stores the validated snapshot and notices in memory.
 - One main-window capability with no granted permissions.
 - No Tauri plugins, remote content, credential storage, or network
   integrations.
 
 GitHub and AI integrations are not part of the foundation implementation.
-The app-data boundary exists but is not connected to React state. Workspace and
-settings controls, live project data, and user-facing persistence behavior
-remain deferred to focused follow-up changes.
+React is connected only to `load_app_data`. Workspace and settings mutations,
+persisted-setting application, live project data, and user-facing persistence
+controls remain deferred to focused follow-up changes.
 
 ## Architecture principles
 
@@ -71,9 +73,21 @@ The app-data IPC boundary is implemented under `types` and `services/tauri`:
 - `IpcContractError` identifies the command and contract phase without
   retaining the raw IPC value.
 
-The wrappers are not imported by React components yet. A later frontend state
-layer will own bootstrap state, mirror validated app data, expose mutations to
-views, and present safe user-facing errors.
+`AppDataProvider` calls the existing `loadAppData()` wrapper during startup and
+exposes a guarded context with `loading`, `ready`, and `error` states. The
+provider stores the canonical `AppDataDto` snapshot and validated notices in
+React memory. A module-scoped single-flight promise ensures React Strict Mode
+remounts share one request per JavaScript application runtime.
+
+The shell remains visible for every state. The status panel uses fixed
+frontend-owned loading, ready, error, and recovery text. It does not render raw
+rejections or arbitrary notice messages. No retry or mutation methods are
+exposed by the provider.
+
+The loaded `colorMode`, `sidebarCollapsed`, `statusPanelVisible`, workspace
+records, and active workspace are not applied to the interface yet. Future
+frontend state work will connect approved mutations and feature views without
+bypassing the typed service boundary.
 
 React context and reducers are sufficient for the foundation. A third-party
 state-management library is not required.
@@ -186,8 +200,12 @@ dispatch API is exposed.
 Tabs are session state and are not persisted. Home is always open, first, and
 cannot be closed. Opening another internal view appends a singleton tab or
 focuses its existing tab. Closing an active tab selects the right neighbor,
-then the left neighbor, then Home. Status messages will also remain session
-state when implemented.
+then the left neighbor, then Home.
+
+The startup app-data snapshot and recovery notices are held in React memory for
+the current application runtime. The current status panel presents only this
+small bootstrap state; a bounded general-purpose session status log remains
+deferred.
 
 ## Suggested structure
 
@@ -232,12 +250,11 @@ cross-feature state belongs in `state`, and IPC access belongs exclusively in
 
 ## Next implementation order
 
-1. Add a React app-data provider with explicit loading, ready, and error states.
-2. Load the validated snapshot during frontend bootstrap.
-3. Connect metadata-only workspace behavior to the Projects view.
-4. Connect non-sensitive settings behavior to the Settings view.
-5. Replace the static status placeholder with bounded session status state.
-6. Run native, frontend, security, and manual desktop smoke checks.
+1. Connect metadata-only workspace behavior to the Projects view.
+2. Connect non-sensitive settings behavior to the Settings view.
+3. Apply approved persisted presentation settings during bootstrap.
+4. Replace the bootstrap-only status text with bounded session status state.
+5. Run native, frontend, security, and manual desktop smoke checks.
 
 ## Deferred decisions
 

@@ -1,12 +1,27 @@
+import { useAppData } from "../../state/AppDataProvider";
+import { getAppDataStatusText } from "../../state/appDataState";
+
 export function StatusPanel() {
+  const appData = useAppData();
+  const statusText = getAppDataStatusText(appData);
+
   return (
-    <footer className="status-panel" aria-label="Application status">
+    <footer
+      className="status-panel"
+      aria-label="Application status"
+      aria-live="polite"
+      aria-atomic="true"
+    >
       <span className="status-panel__item">
         <span className="status-panel__indicator" aria-hidden="true" />
-        UI shell ready
+        {statusText.primary}
       </span>
-      <span className="status-panel__divider" aria-hidden="true" />
-      <span className="status-panel__item">No native commands</span>
+      {statusText.notice !== null && (
+        <>
+          <span className="status-panel__divider" aria-hidden="true" />
+          <span className="status-panel__item">{statusText.notice}</span>
+        </>
+      )}
     </footer>
   );
 }

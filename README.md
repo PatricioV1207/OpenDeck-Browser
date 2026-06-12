@@ -19,11 +19,14 @@ The repository currently contains the foundation build:
 - Managed Rust state that lazily loads and serializes app-data mutations.
 - Seven narrow Tauri commands with safe DTOs, notices, and error codes.
 - Typed frontend service wrappers that validate every unknown IPC response.
+- A React app-data provider that loads the validated snapshot once during
+  startup and keeps it in memory.
 - A restrictive Content Security Policy and an empty main-window capability.
 
-The app-data boundary is implemented but is not connected to React state or the
-internal views yet. Workspace CRUD UI, settings UI behavior, live project data,
-GitHub, and AI features remain deferred.
+The frontend loads app data and reports a safe startup status, but it does not
+apply persisted settings or expose workspace mutations yet. Workspace CRUD UI,
+settings UI behavior, live project data, GitHub, and AI features remain
+deferred.
 See [`docs/mvp.md`](docs/mvp.md) for the planned MVP scope.
 
 ## Prerequisites
