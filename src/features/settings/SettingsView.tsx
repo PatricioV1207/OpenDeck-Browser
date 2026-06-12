@@ -1,106 +1,109 @@
 import { StatusBadge } from "../../components/ui/StatusBadge";
 import { ViewHeader } from "../../components/ui/ViewHeader";
 import { ViewSection } from "../../components/ui/ViewSection";
+import { useAppData } from "../../state/AppDataProvider";
+import {
+  createSettingsPresentation,
+  type SettingsPresentation,
+} from "./settingsPresentation";
 
-const settingSections = [
+const securityBoundaries = [
   {
-    title: "Appearance",
-    description:
-      "Future options will cover color mode and the way the sidebar is presented.",
-    items: [
-      {
-        name: "Color mode",
-        detail:
-          "The stored system, light, or dark preference loads at startup but is not applied yet.",
-        status: "Not available yet",
-        tone: "planned" as const,
-      },
-      {
-        name: "Sidebar presentation",
-        detail:
-          "The stored sidebar preference loads at startup but does not change the responsive layout yet.",
-        status: "Not available yet",
-        tone: "planned" as const,
-      },
-    ],
+    name: "Credential storage",
+    detail: "No GitHub, AI, or other provider credentials are requested or stored.",
   },
   {
-    title: "Workspace behavior",
-    description:
-      "Workspace metadata loads into memory, but startup and selection controls remain descriptive only.",
-    items: [
-      {
-        name: "Active workspace",
-        detail:
-          "A stored active workspace can load at startup but is not shown or editable here.",
-        status: "Not available yet",
-        tone: "planned" as const,
-      },
-      {
-        name: "Startup behavior",
-        detail:
-          "The application currently starts with Home as the only open tab.",
-        status: "Not available yet",
-        tone: "planned" as const,
-      },
-    ],
-  },
-  {
-    title: "Privacy and security",
-    description:
-      "The current foundation keeps sensitive integrations disabled by default.",
-    items: [
-      {
-        name: "Credential storage",
-        detail:
-          "No GitHub, AI, or other provider credentials are requested or stored.",
-        status: "Protected by default",
-        tone: "protected" as const,
-      },
-      {
-        name: "Remote data sharing",
-        detail:
-          "No repository content or application data is sent to remote services.",
-        status: "Protected by default",
-        tone: "protected" as const,
-      },
-    ],
+    name: "Remote data sharing",
+    detail: "No repository content or application data is sent to remote services.",
   },
 ];
 
 export function SettingsView() {
+  const appData = useAppData();
+  const presentation = createSettingsPresentation(appData);
+
   return (
     <div className="internal-view">
       <ViewHeader
         eyebrow="Settings"
         title="Preferences will stay explicit, local, and reviewable."
-        summary="Persisted settings now load into memory during startup. This view remains descriptive and does not apply or update them."
-        status="Placeholder view"
+        summary="Settings reads non-sensitive stored preferences from the validated in-memory app-data snapshot without applying or changing them."
+        status="Read-only view"
       />
 
-      {settingSections.map((section) => (
-        <ViewSection
-          title={section.title}
-          intro={section.description}
-          key={section.title}
-        >
-          <dl className="settings-list">
-            {section.items.map((item) => (
-              <div className="settings-list__row" key={item.name}>
-                <div>
-                  <dt>{item.name}</dt>
-                  <dd>{item.detail}</dd>
-                </div>
-                <StatusBadge tone={item.tone}>{item.status}</StatusBadge>
-              </div>
-            ))}
-          </dl>
-        </ViewSection>
-      ))}
+      <SettingsContent presentation={presentation} />
+
+      <ViewSection
+        title="Privacy and security"
+        intro="Sensitive integrations remain disabled by default."
+      >
+        <dl className="settings-list">
+          {securityBoundaries.map((boundary) => (
+            <div className="settings-list__row" key={boundary.name}>
+              <dt>{boundary.name}</dt>
+              <dd className="settings-list__description">{boundary.detail}</dd>
+              <dd className="settings-list__aside">
+                <StatusBadge tone="protected">Protected by default</StatusBadge>
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </ViewSection>
 
       <p className="view-disclaimer">
-        Loaded preferences are not editable or applied in this version.
+        Stored preferences are read-only. Editing and application remain
+        deferred to separately approved implementation steps.
       </p>
     </div>
+  );
+}
+
+function SettingsContent({
+  presentation,
+}: {
+  presentation: SettingsPresentation;
+}) {
+  if (presentation.status === "loading") {
+    return (
+      <section
+        className="empty-state settings-state"
+        aria-labelledby="settings-loading-title"
+        aria-busy="true"
+      >
+        <StatusBadge tone="foundation">Loading</StatusBadge>
+        <h2 id="settings-loading-title">Loading stored preferences</h2>
+        <p>Non-sensitive settings are being loaded from local app data.</p>
+      </section>
+    );
+  }
+
+  if (presentation.status === "error") {
+    return (
+      <section
+        className="empty-state settings-state"
+        aria-labelledby="settings-error-title"
+      >
+        <StatusBadge tone="protected">Unavailable</StatusBadge>
+        <h2 id="settings-error-title">Stored preferences are unavailable</h2>
+        <p>{presentation.message}</p>
+      </section>
+    );
+  }
+
+  return (
+    <ViewSection
+      title="Stored preferences"
+      intro="These values are loaded from app data but are not applied by the interface yet."
+    >
+      <dl className="settings-list settings-list--stored">
+        {presentation.rows.map((row) => (
+          <div className="settings-list__row" key={row.id}>
+            <dt>{row.name}</dt>
+            <dd className="settings-list__description">{row.description}</dd>
+            <dd className="settings-value">{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </ViewSection>
   );
 }

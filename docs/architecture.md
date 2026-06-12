@@ -13,7 +13,8 @@ The current foundation is intentionally small:
 - One React application shell.
 - Separate sidebar, top bar, workspace, tab strip, and status components.
 - Frontend-only singleton tabs managed by React context and a reducer.
-- Feature-owned Home, Settings, and About views plus a read-only Projects view.
+- Feature-owned Home and About views plus read-only Projects and Settings
+  views.
 - Small shared presentation components for view headers, sections, status
   labels, and information cards.
 - Plain CSS organized into design tokens, global rules, and layout rules.
@@ -30,9 +31,10 @@ The current foundation is intentionally small:
 
 GitHub and AI integrations are not part of the foundation implementation.
 React is connected only to `load_app_data`. Projects presents validated
-metadata-only workspace records from the provider snapshot. Workspace and
-settings mutations, persisted-setting application, live repository data, and
-user-facing persistence controls remain deferred to focused follow-up changes.
+metadata-only workspace records, and Settings presents validated stored
+preferences from the provider snapshot. Workspace and settings mutations,
+persisted-setting application, live repository data, and user-facing
+persistence controls remain deferred to focused follow-up changes.
 
 ## Architecture principles
 
@@ -61,6 +63,7 @@ Current frontend responsibilities include:
 - Rendering the application shell and internal views.
 - Managing open and active tabs in session memory.
 - Presenting validated workspace metadata read-only in Projects.
+- Presenting validated non-sensitive preferences read-only in Settings.
 
 The app-data IPC boundary is implemented under `types` and `services/tauri`:
 
@@ -93,9 +96,16 @@ formatting is deterministic and falls back to fixed text for unexpected input.
 Projects does not import the Tauri service, expose commands, or mutate provider
 state.
 
-The loaded `colorMode`, `sidebarCollapsed`, and `statusPanelVisible` values are
-not applied to the interface yet. Future frontend state work will connect
-approved mutations without bypassing the typed service boundary.
+Settings maps the provider state into fixed loading, error, and ready
+presentations. Ready values show the stored color mode, sidebar presentation,
+and status-panel visibility with human-readable text. Settings does not render
+provider error messages or notices and does not import the Tauri service,
+expose commands, or mutate provider state.
+
+The displayed `colorMode`, `sidebarCollapsed`, and `statusPanelVisible` values
+are not applied to the interface yet. Future frontend state work will connect
+approved mutations and application behavior without bypassing the typed
+service boundary.
 
 React context and reducers are sufficient for the foundation. A third-party
 state-management library is not required.
@@ -259,8 +269,8 @@ cross-feature state belongs in `state`, and IPC access belongs exclusively in
 ## Next implementation order
 
 1. Connect approved metadata-only workspace mutations to the Projects view.
-2. Connect non-sensitive settings behavior to the Settings view.
-3. Apply approved persisted presentation settings during bootstrap.
+2. Connect approved non-sensitive settings mutations to the Settings view.
+3. Apply approved stored presentation settings during bootstrap.
 4. Replace the bootstrap-only status text with bounded session status state.
 5. Run native, frontend, security, and manual desktop smoke checks.
 

@@ -298,8 +298,12 @@
   min-width: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "term aside"
+    "description aside";
   align-items: center;
-  gap: var(--space-5);
+  column-gap: var(--space-5);
+  row-gap: var(--space-2);
   padding: var(--space-5);
 }
 
@@ -307,9 +311,40 @@
   border-top: 1px solid var(--color-border);
 }
 
-.settings-list__row > div {
-  display: grid;
-  gap: var(--space-2);
+.settings-list__row dt {
+  min-width: 0;
+  grid-area: term;
+}
+
+.settings-list__description {
+  min-width: 0;
+  grid-area: description;
+  overflow-wrap: anywhere;
+}
+
+.settings-list__aside,
+.settings-value {
+  grid-area: aside;
+  justify-self: end;
+}
+
+.settings-list__aside {
+  max-width: 100%;
+}
+
+.settings-value {
+  width: fit-content;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .technology-list {
@@ -357,10 +392,23 @@
   }
 
   .view-status-list > div,
-  .settings-list__row,
   .workspace-card__details > div {
     grid-template-columns: 1fr;
     gap: var(--space-3);
+  }
+
+  .settings-list__row {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "term"
+      "description"
+      "aside";
+    gap: var(--space-2);
+  }
+
+  .settings-list__aside,
+  .settings-value {
+    justify-self: start;
   }
 }
 
