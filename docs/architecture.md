@@ -42,3 +42,4 @@ opendeck-browser/
 ├─ docs/
 ├─ .github/
 └─ AGENTS.md
+```

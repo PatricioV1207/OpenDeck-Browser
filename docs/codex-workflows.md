@@ -79,3 +79,4 @@ feat: add basic tab system
 feat: add GitHub repository integration
 fix: handle empty issue states
 security: document token handling rules
+```
