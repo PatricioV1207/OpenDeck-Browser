@@ -8,20 +8,22 @@ open-source maintainers, developers, and contributors.
 The repository currently contains the foundation build:
 
 - A single-window Tauri 2 desktop shell.
-- A static React and TypeScript application layout built with Vite.
-- Separate sidebar, top bar, workspace, future tab area, and status components.
+- A React and TypeScript application layout built with Vite.
+- Separate sidebar, top bar, workspace, tab strip, and status components.
+- Frontend-only singleton tabs that reset when the application restarts.
 - A minimal Rust backend with no application IPC commands.
 - A restrictive Content Security Policy and an empty main-window capability.
 
-The visible layout is static. Workspace CRUD, settings persistence, tabs,
-internal views, GitHub, and AI features are not implemented yet.
+Home, Projects, Settings, and About currently render placeholder panels.
+Workspace CRUD, settings persistence, real internal views, GitHub, and AI
+features are not implemented yet.
 See [`docs/mvp.md`](docs/mvp.md) for the planned MVP scope.
 
 ## Prerequisites
 
 Install:
 
-- Node.js and npm.
+- Node.js 22.12 or newer and npm.
 - The Rust toolchain through [rustup](https://rustup.rs/).
 - The operating-system prerequisites listed in the
   [Tauri documentation](https://v2.tauri.app/start/prerequisites/).
@@ -58,6 +60,12 @@ Build the frontend:
 
 ```text
 npm run build
+```
+
+Run the dependency-free reducer tests:
+
+```text
+npm test
 ```
 
 Check Rust formatting and compilation:
