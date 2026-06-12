@@ -21,3 +21,16 @@ pub enum StorageError {
     BackupFailed,
     ReplacementFailed,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StateError {
+    Domain(DomainError),
+    Storage(StorageError),
+    StateUnavailable,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StateFailure {
+    pub error: StateError,
+    pub notices: Vec<StorageNotice>,
+}
