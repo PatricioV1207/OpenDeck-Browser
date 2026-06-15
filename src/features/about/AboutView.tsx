@@ -50,7 +50,7 @@ export function AboutView() {
           <div>
             <dt>Native application commands</dt>
             <dd>
-              App-data loading enabled; feature mutations are not connected
+              App-data loading and metadata-only workspace creation enabled
             </dd>
           </div>
         </dl>
