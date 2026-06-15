@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { executeCreateWorkspace } from "../src/state/appDataActions.ts";
+import {
+  createAppDataMutationQueue,
+  executeCreateWorkspace,
+  executeRenameWorkspace,
+} from "../src/state/appDataActions.ts";
 import {
   AppCommandError,
   IpcContractError,
@@ -36,8 +40,13 @@ function readyState(overrides = {}) {
   };
 }
 
-function commandError(code, field, notices = []) {
-  return new AppCommandError("create_workspace", {
+function commandError(
+  code,
+  field,
+  notices = [],
+  command = "create_workspace",
+) {
+  return new AppCommandError(command, {
     code,
     message: "/private/path and native diagnostic details",
     field,
@@ -229,4 +238,299 @@ test("does not invoke the command before app data is ready", async () => {
     assert.equal(outcome.state, state);
     assert.deepEqual(outcome.result, { ok: false, code: "internal" });
   }
+});
+
+test("rename replaces provider state with the canonical successful response", async () => {
+  const original = workspace();
+  const previous = readyState({
+    workspaces: [original],
+    activeWorkspaceId: original.id,
+  });
+  const canonicalWorkspace = workspace({
+    name: "OpenDeck Maintainers",
+    updatedAt: "2026-06-15T11:00:00Z",
+  });
+  const response = {
+    data: {
+      ...previous.data,
+      workspaces: [canonicalWorkspace],
+    },
+    notices: [
+      {
+        code: "corrupt_data_recovered",
+        message: "Validated native notice text.",
+      },
+    ],
+  };
+  const calls = [];
+
+  const outcome = await executeRenameWorkspace(
+    previous,
+    original.id,
+    "OpenDeck Maintainers",
+    async (id, name) => {
+      calls.push({ id, name });
+      return response;
+    },
+  );
+
+  assert.deepEqual(calls, [
+    {
+      id: "workspace-1",
+      name: "OpenDeck Maintainers",
+    },
+  ]);
+  assert.deepEqual(outcome.result, { ok: true, outcome: "renamed" });
+  assert.equal(outcome.state.status, "ready");
+  assert.equal(outcome.state.data, response.data);
+  assert.equal(outcome.state.data.workspaces[0], canonicalWorkspace);
+  assert.deepEqual(outcome.state.notices, response.notices);
+  assert.notEqual(outcome.state.notices, response.notices);
+  assert.notEqual(outcome.state.notices[0], response.notices[0]);
+  assert.equal(previous.data.workspaces[0], original);
+});
+
+test("rename reports unchanged only from the canonical response", async () => {
+  const original = workspace();
+  const previous = readyState({
+    workspaces: [original],
+    activeWorkspaceId: original.id,
+  });
+  const response = {
+    data: {
+      ...previous.data,
+      workspaces: [{ ...original }],
+    },
+    notices: [],
+  };
+
+  const outcome = await executeRenameWorkspace(
+    previous,
+    original.id,
+    "  OpenDeck Browser  ",
+    async () => response,
+  );
+
+  assert.deepEqual(outcome.result, { ok: true, outcome: "unchanged" });
+  assert.equal(outcome.state.status, "ready");
+  assert.equal(outcome.state.data, response.data);
+});
+
+test("rename maps supported command failures to safe result codes", async () => {
+  const cases = [
+    ["validation", "name"],
+    ["conflict", "name"],
+    ["storage", null],
+    ["unsupported_schema", "schemaVersion"],
+    ["internal", null],
+  ];
+
+  for (const [code, field] of cases) {
+    const previous = readyState({
+      workspaces: [workspace()],
+    });
+    const outcome = await executeRenameWorkspace(
+      previous,
+      "workspace-1",
+      "Renamed",
+      async () => {
+        throw commandError(code, field, [], "rename_workspace");
+      },
+    );
+
+    assert.deepEqual(outcome.result, { ok: false, code });
+    assert.equal(outcome.state, previous);
+  }
+});
+
+test("rename maps not-found, mismatched fields, commands, and unexpected failures to internal", async () => {
+  const failures = [
+    commandError("not_found", "id", [], "rename_workspace"),
+    commandError("validation", "id", [], "rename_workspace"),
+    commandError("conflict", "patch", [], "rename_workspace"),
+    commandError("conflict", "name"),
+    new IpcContractError("create_workspace", "success"),
+    new Error("/private/path/token-value"),
+    "/private/path/raw-rejection",
+  ];
+
+  for (const failure of failures) {
+    const previous = readyState({
+      workspaces: [workspace()],
+    });
+    const outcome = await executeRenameWorkspace(
+      previous,
+      "workspace-1",
+      "Renamed",
+      async () => {
+        throw failure;
+      },
+    );
+
+    assert.deepEqual(outcome.result, { ok: false, code: "internal" });
+    assert.equal(outcome.state, previous);
+    assert.equal(JSON.stringify(outcome).includes("/private/path"), false);
+  }
+});
+
+test("rename maps malformed success and error contracts to contract", async () => {
+  for (const phase of ["success", "error"]) {
+    const previous = readyState({
+      workspaces: [workspace()],
+    });
+    const outcome = await executeRenameWorkspace(
+      previous,
+      "workspace-1",
+      "Renamed",
+      async () => {
+        throw new IpcContractError("rename_workspace", phase);
+      },
+    );
+
+    assert.deepEqual(outcome.result, { ok: false, code: "contract" });
+    assert.equal(outcome.state, previous);
+  }
+});
+
+test("rename preserves validated command failure notices without changing data", async () => {
+  const previous = readyState({
+    workspaces: [workspace()],
+    activeWorkspaceId: "workspace-1",
+  });
+  const notices = [
+    {
+      code: "corrupt_data_recovered",
+      message: "Validated but never rendered directly.",
+    },
+  ];
+
+  const outcome = await executeRenameWorkspace(
+    previous,
+    "workspace-1",
+    "Duplicate",
+    async () => {
+      throw commandError("conflict", "name", notices, "rename_workspace");
+    },
+  );
+
+  assert.deepEqual(outcome.result, { ok: false, code: "conflict" });
+  assert.equal(outcome.state.status, "ready");
+  assert.equal(outcome.state.data, previous.data);
+  assert.deepEqual(outcome.state.notices, notices);
+  assert.notEqual(outcome.state.notices, notices);
+  assert.notEqual(outcome.state.notices[0], notices[0]);
+});
+
+test("rename rejects unavailable and missing targets without invoking the command", async () => {
+  const states = [
+    {
+      status: "loading",
+      data: null,
+      notices: [],
+      error: null,
+    },
+    {
+      status: "error",
+      data: null,
+      notices: [],
+      error: {
+        code: "storage",
+        message: "Safe provider message.",
+      },
+    },
+    readyState(),
+  ];
+
+  for (const state of states) {
+    let calls = 0;
+    const outcome = await executeRenameWorkspace(
+      state,
+      "workspace-404",
+      "Renamed",
+      async () => {
+        calls += 1;
+        throw new Error("command must not run");
+      },
+    );
+
+    assert.equal(calls, 0);
+    assert.equal(outcome.state, state);
+    assert.deepEqual(outcome.result, { ok: false, code: "internal" });
+  }
+});
+
+test("rename rejects a canonical response that omits the target workspace", async () => {
+  const previous = readyState({
+    workspaces: [workspace()],
+  });
+  const response = {
+    data: {
+      ...previous.data,
+      workspaces: [],
+      activeWorkspaceId: null,
+    },
+    notices: [],
+  };
+
+  const outcome = await executeRenameWorkspace(
+    previous,
+    "workspace-1",
+    "Renamed",
+    async () => response,
+  );
+
+  assert.deepEqual(outcome.result, { ok: false, code: "internal" });
+  assert.equal(outcome.state, previous);
+});
+
+test("shared mutation queue serializes operations in submission order", async () => {
+  const queue = createAppDataMutationQueue();
+  const events = [];
+  let releaseFirst;
+  const firstGate = new Promise((resolve) => {
+    releaseFirst = resolve;
+  });
+
+  const first = queue.enqueue(async () => {
+    events.push("first:start");
+    await firstGate;
+    events.push("first:end");
+    return "first";
+  });
+  const second = queue.enqueue(async () => {
+    events.push("second:start");
+    events.push("second:end");
+    return "second";
+  });
+
+  await Promise.resolve();
+  assert.deepEqual(events, ["first:start"]);
+  releaseFirst();
+
+  assert.equal(await first, "first");
+  assert.equal(await second, "second");
+  assert.deepEqual(events, [
+    "first:start",
+    "first:end",
+    "second:start",
+    "second:end",
+  ]);
+});
+
+test("shared mutation queue continues after an operation rejects", async () => {
+  const queue = createAppDataMutationQueue();
+  const events = [];
+
+  const failure = queue.enqueue(async () => {
+    events.push("failure");
+    throw new Error("expected test failure");
+  });
+  const success = queue.enqueue(async () => {
+    events.push("success");
+    return "continued";
+  });
+
+  await assert.rejects(failure, /expected test failure/);
+  assert.equal(await success, "continued");
+  assert.deepEqual(events, ["failure", "success"]);
 });

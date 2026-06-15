@@ -11,10 +11,14 @@ import {
 import {
   createWorkspace as createWorkspaceCommand,
   loadAppData,
+  renameWorkspace as renameWorkspaceCommand,
 } from "../services/tauri/appDataService.ts";
 import {
+  createAppDataMutationQueue,
   executeCreateWorkspace,
+  executeRenameWorkspace,
   type CreateWorkspaceResult,
+  type RenameWorkspaceResult,
 } from "./appDataActions.ts";
 import {
   createErrorAppDataState,
@@ -30,12 +34,13 @@ const loadAppDataOnce = createSingleFlightLoader(loadAppData);
 
 export interface AppDataActions {
   createWorkspace(name: string): Promise<CreateWorkspaceResult>;
+  renameWorkspace(id: string, name: string): Promise<RenameWorkspaceResult>;
 }
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppDataState>(initialAppDataState);
   const stateRef = useRef<AppDataState>(initialAppDataState);
-  const createWorkspaceInFlightRef = useRef(false);
+  const mutationQueueRef = useRef(createAppDataMutationQueue());
 
   const commitState = useCallback((nextState: AppDataState) => {
     stateRef.current = nextState;
@@ -65,19 +70,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const createWorkspace = useCallback(
     async (name: string): Promise<CreateWorkspaceResult> => {
-      if (
-        stateRef.current.status !== "ready" ||
-        createWorkspaceInFlightRef.current
-      ) {
+      if (stateRef.current.status !== "ready") {
         return {
           ok: false,
           code: "internal",
         };
       }
 
-      createWorkspaceInFlightRef.current = true;
-
-      try {
+      return mutationQueueRef.current.enqueue(async () => {
         const outcome = await executeCreateWorkspace(
           stateRef.current,
           name,
@@ -89,9 +89,34 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         }
 
         return outcome.result;
-      } finally {
-        createWorkspaceInFlightRef.current = false;
+      });
+    },
+    [commitState],
+  );
+
+  const renameWorkspace = useCallback(
+    async (id: string, name: string): Promise<RenameWorkspaceResult> => {
+      if (stateRef.current.status !== "ready") {
+        return {
+          ok: false,
+          code: "internal",
+        };
       }
+
+      return mutationQueueRef.current.enqueue(async () => {
+        const outcome = await executeRenameWorkspace(
+          stateRef.current,
+          id,
+          name,
+          renameWorkspaceCommand,
+        );
+
+        if (outcome.state !== stateRef.current) {
+          commitState(outcome.state);
+        }
+
+        return outcome.result;
+      });
     },
     [commitState],
   );
@@ -99,8 +124,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const actions = useMemo<AppDataActions>(
     () => ({
       createWorkspace,
+      renameWorkspace,
     }),
-    [createWorkspace],
+    [createWorkspace, renameWorkspace],
   );
 
   return (
