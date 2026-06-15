@@ -13,8 +13,8 @@ The current foundation is intentionally small:
 - One React application shell.
 - Separate sidebar, top bar, workspace, tab strip, and status components.
 - Frontend-only singleton tabs managed by React context and a reducer.
-- Feature-owned read-only Home, Projects, and Settings views plus an About
-  view.
+- Feature-owned read-only Home and Settings views, a create-enabled Projects
+  view, and an About view.
 - Small shared presentation components for view headers, sections, status
   labels, and information cards.
 - Plain CSS organized into design tokens, global rules, and layout rules.
@@ -23,19 +23,20 @@ The current foundation is intentionally small:
 - Strict JSON storage and managed Rust state for serialized app-data access.
 - Seven narrow Tauri commands registered through one invoke handler.
 - Typed frontend DTOs, runtime guards, and command-specific service wrappers.
-- A React app-data provider that performs one load-only startup request and
-  stores the validated snapshot and notices in memory.
+- A React app-data provider that performs one startup load, stores the
+  validated snapshot and notices in memory, and exposes one narrow
+  workspace-creation action.
 - One main-window capability with no granted permissions.
 - No Tauri plugins, remote content, credential storage, or network
   integrations.
 
 GitHub and AI integrations are not part of the foundation implementation.
-React is connected only to `load_app_data`. Home presents a safe summary of
-the validated snapshot, Projects presents validated metadata-only workspace
-records, and Settings presents validated stored preferences. Workspace and
-settings mutations, active-workspace selection, persisted-setting application,
-live repository data, and user-facing persistence controls remain deferred to
-focused follow-up changes.
+React uses `load_app_data` during startup and `create_workspace` through the
+provider action boundary. Home presents a safe summary of the validated
+snapshot, Projects can create and present metadata-only workspaces, and
+Settings presents validated stored preferences. Rename, deletion, manual
+active-workspace selection, settings mutations, persisted-setting application,
+live repository data, and broader persistence controls remain deferred.
 
 ## Architecture principles
 
@@ -64,7 +65,8 @@ Current frontend responsibilities include:
 - Rendering the application shell and internal views.
 - Managing open and active tabs in session memory.
 - Presenting a validated app-data summary read-only in Home.
-- Presenting validated workspace metadata read-only in Projects.
+- Creating metadata-only workspaces and presenting validated workspace
+  metadata in Projects.
 - Presenting validated non-sensitive preferences read-only in Settings.
 
 The app-data IPC boundary is implemented under `types` and `services/tauri`:
@@ -80,16 +82,18 @@ The app-data IPC boundary is implemented under `types` and `services/tauri`:
 - `IpcContractError` identifies the command and contract phase without
   retaining the raw IPC value.
 
-`AppDataProvider` calls the existing `loadAppData()` wrapper during startup and
-exposes a guarded context with `loading`, `ready`, and `error` states. The
-provider stores the canonical `AppDataDto` snapshot and validated notices in
-React memory. A module-scoped single-flight promise ensures React Strict Mode
-remounts share one request per JavaScript application runtime.
+`AppDataProvider` calls the existing `loadAppData()` wrapper during startup,
+exposes a guarded data context with `loading`, `ready`, and `error` states, and
+exposes a separate action context containing only `createWorkspace(name)`.
+The provider stores the canonical `AppDataDto` snapshot and validated notices
+in React memory. A module-scoped single-flight promise ensures React Strict
+Mode remounts share one startup request per JavaScript application runtime.
 
 The shell remains visible for every state. The status panel uses fixed
 frontend-owned loading, ready, error, and recovery text. It does not render raw
-rejections or arbitrary notice messages. No retry or mutation methods are
-exposed by the provider.
+rejections or arbitrary notice messages. The provider rejects creation before
+app data is ready, serializes creation attempts, replaces state only with a
+validated canonical command response, and reduces failures to safe codes.
 
 Home maps the provider state into fixed loading, error, and ready
 presentations. The ready summary shows the workspace count, active workspace
@@ -99,11 +103,12 @@ messages, imports no Tauri service, exposes no controls, and does not mutate
 provider state.
 
 Projects maps the provider state into fixed loading, error, empty, and ready
-presentations. Ready workspaces remain in canonical DTO order and show only the
-name, ID, UTC creation and update timestamps, and an active marker. Timestamp
-formatting is deterministic and falls back to fixed text for unexpected input.
-Projects does not import the Tauri service, expose commands, or mutate provider
-state.
+presentations. When app data is ready, its create form validates and trims a
+workspace name for immediate UX, then delegates to the provider action. Rust
+remains authoritative and returns the canonical ID, timestamps, ordering, and
+active selection. Ready workspaces show only the name, ID, UTC creation and
+update timestamps, and an active marker. Projects does not import the Tauri
+service or call `invoke` directly.
 
 Settings maps the provider state into fixed loading, error, and ready
 presentations. Ready values show the stored color mode, sidebar presentation,
@@ -277,11 +282,11 @@ cross-feature state belongs in `state`, and IPC access belongs exclusively in
 
 ## Next implementation order
 
-1. Connect approved metadata-only workspace mutations to the Projects view.
-2. Connect approved non-sensitive settings mutations to the Settings view.
-3. Apply approved stored presentation settings during bootstrap.
-4. Replace the bootstrap-only status text with bounded session status state.
-5. Run native, frontend, security, and manual desktop smoke checks.
+1. Connect approved workspace rename and deletion behavior to Projects.
+2. Design manual active-workspace selection.
+3. Connect approved non-sensitive settings mutations to Settings.
+4. Apply approved stored presentation settings during bootstrap.
+5. Replace the bootstrap-only status text with bounded session status state.
 
 ## Deferred decisions
 

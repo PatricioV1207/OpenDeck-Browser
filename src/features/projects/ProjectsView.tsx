@@ -3,6 +3,7 @@ import { StatusBadge } from "../../components/ui/StatusBadge";
 import { ViewHeader } from "../../components/ui/ViewHeader";
 import { ViewSection } from "../../components/ui/ViewSection";
 import { useAppData } from "../../state/AppDataProvider";
+import { CreateWorkspaceForm } from "./CreateWorkspaceForm";
 import {
   createProjectsPresentation,
   type ProjectsTimestampPresentation,
@@ -18,9 +19,13 @@ export function ProjectsView() {
       <ViewHeader
         eyebrow="Projects"
         title="Organize maintainer context without broad local access."
-        summary="Projects reads metadata-only workspace records from the validated in-memory app-data snapshot without scanning directories or executing repository code."
-        status="Read-only view"
+        summary="Create metadata-only workspaces and review their validated records without scanning directories or executing repository code."
+        status="Creation enabled"
       />
+
+      {appData.status === "ready" && (
+        <CreateWorkspaceForm workspaces={appData.data.workspaces} />
+      )}
 
       <ProjectsContent presentation={presentation} />
 
@@ -52,8 +57,12 @@ export function ProjectsView() {
 
       <dl className="view-status-list" aria-label="Projects implementation status">
         <div>
-          <dt>Workspace creation and editing</dt>
-          <dd>Planned</dd>
+          <dt>Workspace creation</dt>
+          <dd>Available through the validated Rust app-data boundary</dd>
+        </div>
+        <div>
+          <dt>Rename, delete, and active selection</dt>
+          <dd>Deferred to separately approved implementation steps</dd>
         </div>
         <div>
           <dt>Repository connection</dt>
@@ -61,7 +70,7 @@ export function ProjectsView() {
         </div>
         <div>
           <dt>Persistence</dt>
-          <dd>Read through AppDataProvider; mutations remain disconnected</dd>
+          <dd>Successful creation refreshes the canonical provider snapshot</dd>
         </div>
       </dl>
     </div>
@@ -109,9 +118,8 @@ function ProjectsContent({ presentation }: ProjectsContentProps) {
         <StatusBadge tone="planned">No saved metadata</StatusBadge>
         <h2 id="projects-empty-title">No workspaces yet</h2>
         <p>
-          Workspace creation remains deferred. This read-only view will list
-          metadata after workspaces are created through a future approved
-          interface.
+          Use the create form above to add a metadata-only workspace. The
+          workspace will appear here after Rust validates and persists it.
         </p>
       </section>
     );

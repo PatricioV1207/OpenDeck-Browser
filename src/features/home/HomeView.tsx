@@ -56,9 +56,9 @@ export function HomeView() {
       </ViewSection>
 
       <p className="view-disclaimer">
-        Workspace creation, editing, deletion, active selection, settings
-        editing, and stored-setting application remain deferred to separately
-        approved implementation steps.
+        Workspace rename, deletion, manual active selection, settings editing,
+        and stored-setting application remain deferred to separately approved
+        implementation steps.
       </p>
     </div>
   );

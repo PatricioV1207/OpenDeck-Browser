@@ -78,11 +78,12 @@ permission.
 - Keep Tauri `invoke` private to command-specific service wrappers.
 - Do not retain malformed raw IPC values in frontend errors.
 
-The React app-data provider calls only the `load_app_data` wrapper. Mutation
-wrappers remain disconnected from React views. Startup results are reduced to
-validated in-memory data, fixed safe failure categories, and validated notice
-codes. A single-flight promise prevents duplicate startup invokes during React
-Strict Mode remounts.
+The React app-data provider calls the `load_app_data` wrapper during startup
+and exposes only the approved `create_workspace` mutation through a separate
+action context. Results are reduced to validated in-memory data, fixed safe
+failure categories, and validated notice codes. A single-flight promise
+prevents duplicate startup invokes during React Strict Mode remounts, and the
+provider serializes workspace-creation attempts.
 
 Home consumes only the provider state. Its read-only presentation maps safe
 provider failure codes to fixed Home-owned text, ignores notices and backend
@@ -90,10 +91,12 @@ messages, and displays only workspace count, active workspace name, stored
 color mode, and a fixed app-data status. It exposes no commands, controls,
 links, or retry behavior.
 
-Projects consumes only the provider state. Its read-only presentation maps safe
-provider failure codes to fixed Projects-owned text, never renders backend
-messages, and displays only workspace name, canonical ID, validated timestamps,
-and active status. It exposes no commands, controls, links, or retry behavior.
+Projects consumes provider state and the narrow creation action. Its form sends
+only a normalized workspace name, performs local UX validation, and relies on
+Rust for authoritative validation and persistence. Projects maps action
+failure codes to fixed frontend-owned text and never renders backend messages,
+rejected values, notices, paths, or diagnostics. It requests no repository,
+folder, path, credential, or remote-account data.
 
 Settings also consumes only the provider state. Its read-only presentation maps
 safe provider failure codes to fixed Settings-owned text, ignores notices and
@@ -206,14 +209,18 @@ The Step 23 app-data boundary was audited with these findings:
 - No `localStorage` or `sessionStorage` use exists.
 - No remote content, external-link behavior, GitHub implementation, or AI
   implementation exists.
-- React uses only the typed `load_app_data` wrapper through `AppDataProvider`.
+- React accesses typed app-data wrappers only through `AppDataProvider`.
+- The provider exposes only the approved `create_workspace` mutation to React
+  and installs only validated canonical responses.
 - Home reads the validated snapshot from `AppDataProvider` and presents a safe
   summary without controls or mutation behavior.
-- Projects reads validated workspace metadata from `AppDataProvider` and
-  presents it without mutation controls.
+- Projects creates metadata-only workspaces through `AppDataProvider` and
+  presents returned canonical metadata. Rename, delete, and manual active
+  selection remain unavailable.
 - Settings reads validated non-sensitive preferences from `AppDataProvider`
   and presents them without editing or application behavior.
-- Workspace and settings mutations remain disconnected from React components.
+- All workspace mutations except creation and all settings mutations remain
+  disconnected from React components.
 - Persisted presentation settings are loaded but are not applied to the UI.
 
 ## Requirements before GitHub integration
