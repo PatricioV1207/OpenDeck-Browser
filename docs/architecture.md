@@ -13,8 +13,8 @@ The current foundation is intentionally small:
 - One React application shell.
 - Separate sidebar, top bar, workspace, tab strip, and status components.
 - Frontend-only singleton tabs managed by React context and a reducer.
-- Feature-owned Home and About views plus read-only Projects and Settings
-  views.
+- Feature-owned read-only Home, Projects, and Settings views plus an About
+  view.
 - Small shared presentation components for view headers, sections, status
   labels, and information cards.
 - Plain CSS organized into design tokens, global rules, and layout rules.
@@ -30,11 +30,12 @@ The current foundation is intentionally small:
   integrations.
 
 GitHub and AI integrations are not part of the foundation implementation.
-React is connected only to `load_app_data`. Projects presents validated
-metadata-only workspace records, and Settings presents validated stored
-preferences from the provider snapshot. Workspace and settings mutations,
-persisted-setting application, live repository data, and user-facing
-persistence controls remain deferred to focused follow-up changes.
+React is connected only to `load_app_data`. Home presents a safe summary of
+the validated snapshot, Projects presents validated metadata-only workspace
+records, and Settings presents validated stored preferences. Workspace and
+settings mutations, active-workspace selection, persisted-setting application,
+live repository data, and user-facing persistence controls remain deferred to
+focused follow-up changes.
 
 ## Architecture principles
 
@@ -62,6 +63,7 @@ Current frontend responsibilities include:
 
 - Rendering the application shell and internal views.
 - Managing open and active tabs in session memory.
+- Presenting a validated app-data summary read-only in Home.
 - Presenting validated workspace metadata read-only in Projects.
 - Presenting validated non-sensitive preferences read-only in Settings.
 
@@ -88,6 +90,13 @@ The shell remains visible for every state. The status panel uses fixed
 frontend-owned loading, ready, error, and recovery text. It does not render raw
 rejections or arbitrary notice messages. No retry or mutation methods are
 exposed by the provider.
+
+Home maps the provider state into fixed loading, error, and ready
+presentations. The ready summary shows the workspace count, active workspace
+name or a fixed no-selection fallback, stored color mode, and a fixed
+loaded-and-validated status. Home ignores provider notices and backend error
+messages, imports no Tauri service, exposes no controls, and does not mutate
+provider state.
 
 Projects maps the provider state into fixed loading, error, empty, and ready
 presentations. Ready workspaces remain in canonical DTO order and show only the

@@ -11,7 +11,7 @@ The repository currently contains the foundation build:
 - A React and TypeScript application layout built with Vite.
 - Separate sidebar, top bar, workspace, tab strip, and status components.
 - Frontend-only singleton tabs that reset when the application restarts.
-- Structured Home and About views plus read-only Projects and Settings views.
+- Read-only Home, Projects, and Settings views plus a structured About view.
 - A Rust-owned, schema-versioned app-data domain for non-sensitive settings and
   metadata-only workspaces.
 - Strict JSON storage under the operating-system application-config directory,
@@ -23,10 +23,11 @@ The repository currently contains the foundation build:
   startup and keeps it in memory.
 - A restrictive Content Security Policy and an empty main-window capability.
 
-The frontend loads app data, reports a safe startup status, presents
-metadata-only workspace records in Projects, and displays stored preferences
-in Settings. It does not apply or update persisted settings and exposes no
-workspace mutations. Workspace CRUD UI, settings editing and application, live
+The frontend loads app data, reports a safe startup status, summarizes the
+validated snapshot in Home, presents metadata-only workspace records in
+Projects, and displays stored preferences in Settings. It does not apply or
+update persisted settings and exposes no workspace mutations. Workspace CRUD
+UI, active-workspace selection, settings editing and application, live
 repository data, GitHub, and AI features remain deferred.
 See [`docs/mvp.md`](docs/mvp.md) for the planned MVP scope.
 
