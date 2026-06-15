@@ -84,6 +84,12 @@ validated in-memory data, fixed safe failure categories, and validated notice
 codes. A single-flight promise prevents duplicate startup invokes during React
 Strict Mode remounts.
 
+Home consumes only the provider state. Its read-only presentation maps safe
+provider failure codes to fixed Home-owned text, ignores notices and backend
+messages, and displays only workspace count, active workspace name, stored
+color mode, and a fixed app-data status. It exposes no commands, controls,
+links, or retry behavior.
+
 Projects consumes only the provider state. Its read-only presentation maps safe
 provider failure codes to fixed Projects-owned text, never renders backend
 messages, and displays only workspace name, canonical ID, validated timestamps,
@@ -201,6 +207,8 @@ The Step 23 app-data boundary was audited with these findings:
 - No remote content, external-link behavior, GitHub implementation, or AI
   implementation exists.
 - React uses only the typed `load_app_data` wrapper through `AppDataProvider`.
+- Home reads the validated snapshot from `AppDataProvider` and presents a safe
+  summary without controls or mutation behavior.
 - Projects reads validated workspace metadata from `AppDataProvider` and
   presents it without mutation controls.
 - Settings reads validated non-sensitive preferences from `AppDataProvider`
