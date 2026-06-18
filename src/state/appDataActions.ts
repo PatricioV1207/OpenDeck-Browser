@@ -55,6 +55,31 @@ export type RenameWorkspaceCommand = (
   name: string,
 ) => Promise<AppDataResponseDto>;
 
+export type SetActiveWorkspaceFailureCode =
+  | "storage"
+  | "unsupported_schema"
+  | "contract"
+  | "internal";
+
+export type SetActiveWorkspaceResult =
+  | {
+      readonly ok: true;
+      readonly outcome: "changed" | "unchanged";
+    }
+  | {
+      readonly ok: false;
+      readonly code: SetActiveWorkspaceFailureCode;
+    };
+
+export interface SetActiveWorkspaceActionOutcome {
+  readonly state: AppDataState;
+  readonly result: SetActiveWorkspaceResult;
+}
+
+export type SetActiveWorkspaceCommand = (
+  id: string,
+) => Promise<AppDataResponseDto>;
+
 export interface AppDataMutationQueue {
   enqueue<T>(operation: () => Promise<T>): Promise<T>;
 }
@@ -125,6 +150,45 @@ export async function executeRenameWorkspace(
     return failedRenameOutcome(
       stateWithFailureNotices(state, error, "rename_workspace"),
       mapRenameWorkspaceFailure(error),
+    );
+  }
+}
+
+export async function executeSetActiveWorkspace(
+  state: AppDataState,
+  id: string,
+  command: SetActiveWorkspaceCommand,
+): Promise<SetActiveWorkspaceActionOutcome> {
+  if (state.status !== "ready") {
+    return failedSetActiveWorkspaceOutcome(state, "internal");
+  }
+
+  const currentWorkspace = state.data.workspaces.find(
+    (workspace) => workspace.id === id,
+  );
+  if (currentWorkspace === undefined) {
+    return failedSetActiveWorkspaceOutcome(state, "internal");
+  }
+
+  try {
+    const response = await command(id);
+
+    if (response.data.activeWorkspaceId !== id) {
+      return failedSetActiveWorkspaceOutcome(state, "internal");
+    }
+
+    return {
+      state: createReadyAppDataState(response),
+      result: {
+        ok: true,
+        outcome:
+          state.data.activeWorkspaceId === id ? "unchanged" : "changed",
+      },
+    };
+  } catch (error: unknown) {
+    return failedSetActiveWorkspaceOutcome(
+      stateWithFailureNotices(state, error, "set_active_workspace"),
+      mapSetActiveWorkspaceFailure(error),
     );
   }
 }
@@ -206,10 +270,41 @@ function mapRenameWorkspaceFailure(
   return "internal";
 }
 
+function mapSetActiveWorkspaceFailure(
+  error: unknown,
+): SetActiveWorkspaceFailureCode {
+  if (error instanceof IpcContractError) {
+    return error.command === "set_active_workspace"
+      ? "contract"
+      : "internal";
+  }
+
+  if (
+    error instanceof AppCommandError &&
+    error.command === "set_active_workspace"
+  ) {
+    switch (error.code) {
+      case "storage":
+        return error.field === null ? "storage" : "internal";
+      case "unsupported_schema":
+        return error.field === "schemaVersion"
+          ? "unsupported_schema"
+          : "internal";
+      case "internal":
+      case "validation":
+      case "conflict":
+      case "not_found":
+        return "internal";
+    }
+  }
+
+  return "internal";
+}
+
 function stateWithFailureNotices(
   state: Extract<AppDataState, { status: "ready" }>,
   error: unknown,
-  command: "create_workspace" | "rename_workspace",
+  command: "create_workspace" | "rename_workspace" | "set_active_workspace",
 ): AppDataState {
   if (
     !(error instanceof AppCommandError) ||
@@ -242,6 +337,19 @@ function failedRenameOutcome(
   state: AppDataState,
   code: RenameWorkspaceFailureCode,
 ): RenameWorkspaceActionOutcome {
+  return {
+    state,
+    result: {
+      ok: false,
+      code,
+    },
+  };
+}
+
+function failedSetActiveWorkspaceOutcome(
+  state: AppDataState,
+  code: SetActiveWorkspaceFailureCode,
+): SetActiveWorkspaceActionOutcome {
   return {
     state,
     result: {
