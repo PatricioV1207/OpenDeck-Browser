@@ -3,13 +3,23 @@ import { InfoCard } from "../../components/ui/InfoCard";
 import { StatusBadge } from "../../components/ui/StatusBadge";
 import { ViewHeader } from "../../components/ui/ViewHeader";
 import { ViewSection } from "../../components/ui/ViewSection";
-import { useAppData } from "../../state/AppDataProvider";
+import {
+  useAppData,
+  useAppDataActions,
+} from "../../state/AppDataProvider";
+import type { SetActiveWorkspaceResult } from "../../state/appDataActions";
 import type { WorkspaceDto } from "../../types/appData";
 import { CreateWorkspaceForm } from "./CreateWorkspaceForm";
 import {
   getRenameEditorId,
   RenameWorkspaceForm,
 } from "./RenameWorkspaceForm";
+import {
+  getActiveWorkspaceButtonLabel,
+  getActiveWorkspaceButtonText,
+  getActiveWorkspaceFailureMessage,
+  getActiveWorkspaceSuccessMessage,
+} from "./workspaceActiveSelection";
 import {
   createProjectsPresentation,
   type ProjectsTimestampPresentation,
@@ -18,6 +28,7 @@ import {
 
 export function ProjectsView() {
   const appData = useAppData();
+  const { setActiveWorkspace } = useAppDataActions();
   const presentation = createProjectsPresentation(appData);
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(
     null,
@@ -28,8 +39,18 @@ export function ProjectsView() {
   const [renameAnnouncement, setRenameAnnouncement] = useState<string | null>(
     null,
   );
+  const [activeSelectionMessage, setActiveSelectionMessage] =
+    useState<WorkspaceActiveSelectionMessage | null>(null);
+  const [pendingActiveWorkspaceId, setPendingActiveWorkspaceId] = useState<
+    string | null
+  >(null);
   const [focusWorkspaceId, setFocusWorkspaceId] = useState<string | null>(null);
+  const [focusActiveWorkspaceId, setFocusActiveWorkspaceId] = useState<
+    string | null
+  >(null);
   const renameButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const activeButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const activeSelectionInFlightRef = useRef(false);
 
   useEffect(() => {
     if (focusWorkspaceId === null || pendingWorkspaceId !== null) {
@@ -40,6 +61,18 @@ export function ProjectsView() {
     setFocusWorkspaceId(null);
   }, [focusWorkspaceId, pendingWorkspaceId]);
 
+  useEffect(() => {
+    if (
+      focusActiveWorkspaceId === null ||
+      pendingActiveWorkspaceId !== null
+    ) {
+      return;
+    }
+
+    activeButtonRefs.current.get(focusActiveWorkspaceId)?.focus();
+    setFocusActiveWorkspaceId(null);
+  }, [focusActiveWorkspaceId, pendingActiveWorkspaceId]);
+
   function openRenameEditor(workspaceId: string) {
     if (pendingWorkspaceId !== null) {
       return;
@@ -47,6 +80,7 @@ export function ProjectsView() {
 
     setEditingWorkspaceId(workspaceId);
     setRenameAnnouncement(null);
+    setActiveSelectionMessage(null);
   }
 
   function closeRenameEditor(workspaceId: string) {
@@ -66,6 +100,31 @@ export function ProjectsView() {
     closeRenameEditor(workspaceId);
   }
 
+  async function handleSetActiveWorkspace(
+    workspaceId: string,
+  ): Promise<void> {
+    if (activeSelectionInFlightRef.current) {
+      return;
+    }
+
+    activeSelectionInFlightRef.current = true;
+    setPendingActiveWorkspaceId(workspaceId);
+    setRenameAnnouncement(null);
+    setActiveSelectionMessage(null);
+
+    try {
+      const result = await setActiveWorkspace(workspaceId);
+
+      setActiveSelectionMessage(
+        createActiveSelectionMessage(workspaceId, result),
+      );
+    } finally {
+      activeSelectionInFlightRef.current = false;
+      setPendingActiveWorkspaceId(null);
+      setFocusActiveWorkspaceId(workspaceId);
+    }
+  }
+
   function registerRenameButton(
     workspaceId: string,
     button: HTMLButtonElement | null,
@@ -78,13 +137,25 @@ export function ProjectsView() {
     renameButtonRefs.current.set(workspaceId, button);
   }
 
+  function registerActiveButton(
+    workspaceId: string,
+    button: HTMLButtonElement | null,
+  ) {
+    if (button === null) {
+      activeButtonRefs.current.delete(workspaceId);
+      return;
+    }
+
+    activeButtonRefs.current.set(workspaceId, button);
+  }
+
   return (
     <div className="internal-view">
       <ViewHeader
         eyebrow="Projects"
         title="Organize maintainer context without broad local access."
-        summary="Create and rename metadata-only workspaces without scanning directories or executing repository code."
-        status="Create and rename"
+        summary="Create, rename, and select active metadata-only workspaces without scanning directories or executing repository code."
+        status="Create, rename, and active selection"
       />
 
       {appData.status === "ready" && (
@@ -96,14 +167,18 @@ export function ProjectsView() {
         workspaces={appData.status === "ready" ? appData.data.workspaces : []}
         editingWorkspaceId={editingWorkspaceId}
         pendingWorkspaceId={pendingWorkspaceId}
+        pendingActiveWorkspaceId={pendingActiveWorkspaceId}
         renameAnnouncement={renameAnnouncement}
+        activeSelectionMessage={activeSelectionMessage}
         onOpenRename={openRenameEditor}
         onCancelRename={closeRenameEditor}
         onRenamePendingChange={(workspaceId, pending) =>
           setPendingWorkspaceId(pending ? workspaceId : null)
         }
         onRenameSuccess={handleRenameSuccess}
+        onSetActiveWorkspace={handleSetActiveWorkspace}
         onRenameButtonRef={registerRenameButton}
+        onActiveButtonRef={registerActiveButton}
       />
 
       <ViewSection
@@ -138,8 +213,12 @@ export function ProjectsView() {
           <dd>Available through the validated Rust app-data boundary</dd>
         </div>
         <div>
-          <dt>Delete and active selection</dt>
-          <dd>Deferred to separately approved implementation steps</dd>
+          <dt>Manual active selection</dt>
+          <dd>Available as metadata-only provider state from canonical Rust responses</dd>
+        </div>
+        <div>
+          <dt>Delete workspace</dt>
+          <dd>Deferred to a separately approved implementation step</dd>
         </div>
         <div>
           <dt>Repository connection</dt>
@@ -154,12 +233,20 @@ export function ProjectsView() {
   );
 }
 
+interface WorkspaceActiveSelectionMessage {
+  readonly workspaceId: string;
+  readonly tone: "success" | "error";
+  readonly text: string;
+}
+
 interface ProjectsContentProps {
   presentation: ReturnType<typeof createProjectsPresentation>;
   workspaces: readonly WorkspaceDto[];
   editingWorkspaceId: string | null;
   pendingWorkspaceId: string | null;
+  pendingActiveWorkspaceId: string | null;
   renameAnnouncement: string | null;
+  activeSelectionMessage: WorkspaceActiveSelectionMessage | null;
   onOpenRename: (workspaceId: string) => void;
   onCancelRename: (workspaceId: string) => void;
   onRenamePendingChange: (workspaceId: string, pending: boolean) => void;
@@ -167,7 +254,12 @@ interface ProjectsContentProps {
     workspaceId: string,
     outcome: "renamed" | "unchanged",
   ) => void;
+  onSetActiveWorkspace: (workspaceId: string) => Promise<void>;
   onRenameButtonRef: (
+    workspaceId: string,
+    button: HTMLButtonElement | null,
+  ) => void;
+  onActiveButtonRef: (
     workspaceId: string,
     button: HTMLButtonElement | null,
   ) => void;
@@ -178,12 +270,16 @@ function ProjectsContent({
   workspaces,
   editingWorkspaceId,
   pendingWorkspaceId,
+  pendingActiveWorkspaceId,
   renameAnnouncement,
+  activeSelectionMessage,
   onOpenRename,
   onCancelRename,
   onRenamePendingChange,
   onRenameSuccess,
+  onSetActiveWorkspace,
   onRenameButtonRef,
+  onActiveButtonRef,
 }: ProjectsContentProps) {
   if (presentation.status === "loading") {
     return (
@@ -260,11 +356,22 @@ function ProjectsContent({
               workspaces={workspaces}
               editing={editingWorkspaceId === workspace.id}
               renameDisabled={pendingWorkspaceId !== null}
+              activeSelectionDisabled={pendingActiveWorkspaceId !== null}
+              activeSelectionPending={
+                pendingActiveWorkspaceId === workspace.id
+              }
+              activeSelectionMessage={
+                activeSelectionMessage?.workspaceId === workspace.id
+                  ? activeSelectionMessage
+                  : null
+              }
               onOpenRename={onOpenRename}
               onCancelRename={onCancelRename}
               onRenamePendingChange={onRenamePendingChange}
               onRenameSuccess={onRenameSuccess}
+              onSetActiveWorkspace={onSetActiveWorkspace}
               onRenameButtonRef={onRenameButtonRef}
+              onActiveButtonRef={onActiveButtonRef}
             />
           );
         })}
@@ -279,6 +386,9 @@ interface WorkspaceCardProps {
   workspaces: readonly WorkspaceDto[];
   editing: boolean;
   renameDisabled: boolean;
+  activeSelectionDisabled: boolean;
+  activeSelectionPending: boolean;
+  activeSelectionMessage: WorkspaceActiveSelectionMessage | null;
   onOpenRename: (workspaceId: string) => void;
   onCancelRename: (workspaceId: string) => void;
   onRenamePendingChange: (workspaceId: string, pending: boolean) => void;
@@ -286,7 +396,12 @@ interface WorkspaceCardProps {
     workspaceId: string,
     outcome: "renamed" | "unchanged",
   ) => void;
+  onSetActiveWorkspace: (workspaceId: string) => Promise<void>;
   onRenameButtonRef: (
+    workspaceId: string,
+    button: HTMLButtonElement | null,
+  ) => void;
+  onActiveButtonRef: (
     workspaceId: string,
     button: HTMLButtonElement | null,
   ) => void;
@@ -298,18 +413,28 @@ function WorkspaceCard({
   workspaces,
   editing,
   renameDisabled,
+  activeSelectionDisabled,
+  activeSelectionPending,
+  activeSelectionMessage,
   onOpenRename,
   onCancelRename,
   onRenamePendingChange,
   onRenameSuccess,
+  onSetActiveWorkspace,
   onRenameButtonRef,
+  onActiveButtonRef,
 }: WorkspaceCardProps) {
   const titleId = `workspace-title-${workspace.id}`;
   const renameEditorId = getRenameEditorId(workspace.id);
+  const activeSelectionMessageId = `workspace-active-message-${workspace.id}`;
 
   return (
     <li className="workspace-card-list__item">
-      <article className="workspace-card" aria-labelledby={titleId}>
+      <article
+        className="workspace-card"
+        aria-busy={activeSelectionPending}
+        aria-labelledby={titleId}
+      >
         <div className="workspace-card__header">
           <div className="workspace-card__title">
             <h3 id={titleId}>{workspace.name}</h3>
@@ -317,19 +442,55 @@ function WorkspaceCard({
               <StatusBadge tone="ready">Active</StatusBadge>
             )}
           </div>
-          <button
-            ref={(button) => onRenameButtonRef(workspace.id, button)}
-            className="workspace-card__rename-button"
-            type="button"
-            aria-label={`Rename ${workspace.name}`}
-            aria-expanded={editing}
-            aria-controls={renameEditorId}
-            disabled={renameDisabled}
-            onClick={() => onOpenRename(workspace.id)}
-          >
-            Rename
-          </button>
+          <div className="workspace-card__actions">
+            <button
+              ref={(button) => onActiveButtonRef(workspace.id, button)}
+              className="workspace-card__active-button"
+              type="button"
+              aria-label={getActiveWorkspaceButtonLabel(
+                workspace.name,
+                workspace.isActive,
+              )}
+              aria-describedby={
+                activeSelectionMessage === null
+                  ? undefined
+                  : activeSelectionMessageId
+              }
+              disabled={activeSelectionDisabled}
+              onClick={() => {
+                void onSetActiveWorkspace(workspace.id);
+              }}
+            >
+              {getActiveWorkspaceButtonText(workspace.isActive)}
+            </button>
+            <button
+              ref={(button) => onRenameButtonRef(workspace.id, button)}
+              className="workspace-card__rename-button"
+              type="button"
+              aria-label={`Rename ${workspace.name}`}
+              aria-expanded={editing}
+              aria-controls={renameEditorId}
+              disabled={renameDisabled}
+              onClick={() => onOpenRename(workspace.id)}
+            >
+              Rename
+            </button>
+          </div>
         </div>
+        {activeSelectionMessage !== null && (
+          <p
+            id={activeSelectionMessageId}
+            className={`workspace-active-selection__message workspace-active-selection__message--${activeSelectionMessage.tone}`}
+            role={
+              activeSelectionMessage.tone === "success" ? "status" : "alert"
+            }
+            aria-live={
+              activeSelectionMessage.tone === "success" ? "polite" : undefined
+            }
+          >
+            {activeSelectionMessage.text}
+          </p>
+        )}
         {editing && (
           <RenameWorkspaceForm
             workspace={canonicalWorkspace}
@@ -365,6 +526,25 @@ function WorkspaceCard({
       </article>
     </li>
   );
+}
+
+function createActiveSelectionMessage(
+  workspaceId: string,
+  result: SetActiveWorkspaceResult,
+): WorkspaceActiveSelectionMessage {
+  if (result.ok) {
+    return {
+      workspaceId,
+      tone: "success",
+      text: getActiveWorkspaceSuccessMessage(result.outcome),
+    };
+  }
+
+  return {
+    workspaceId,
+    tone: "error",
+    text: getActiveWorkspaceFailureMessage(result.code),
+  };
 }
 
 function WorkspaceTime({
