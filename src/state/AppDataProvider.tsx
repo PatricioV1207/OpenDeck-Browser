@@ -10,6 +10,7 @@ import {
 } from "react";
 import {
   createWorkspace as createWorkspaceCommand,
+  deleteWorkspace as deleteWorkspaceCommand,
   loadAppData,
   renameWorkspace as renameWorkspaceCommand,
   setActiveWorkspace as setActiveWorkspaceCommand,
@@ -17,9 +18,11 @@ import {
 import {
   createAppDataMutationQueue,
   executeCreateWorkspace,
+  executeDeleteWorkspace,
   executeRenameWorkspace,
   executeSetActiveWorkspace,
   type CreateWorkspaceResult,
+  type DeleteWorkspaceResult,
   type RenameWorkspaceResult,
   type SetActiveWorkspaceResult,
 } from "./appDataActions.ts";
@@ -39,6 +42,7 @@ export interface AppDataActions {
   createWorkspace(name: string): Promise<CreateWorkspaceResult>;
   renameWorkspace(id: string, name: string): Promise<RenameWorkspaceResult>;
   setActiveWorkspace(id: string): Promise<SetActiveWorkspaceResult>;
+  deleteWorkspace(id: string): Promise<DeleteWorkspaceResult>;
 }
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
@@ -151,13 +155,40 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [commitState],
   );
 
+  const deleteWorkspace = useCallback(
+    async (id: string): Promise<DeleteWorkspaceResult> => {
+      if (stateRef.current.status !== "ready") {
+        return {
+          ok: false,
+          code: "internal",
+        };
+      }
+
+      return mutationQueueRef.current.enqueue(async () => {
+        const outcome = await executeDeleteWorkspace(
+          stateRef.current,
+          id,
+          deleteWorkspaceCommand,
+        );
+
+        if (outcome.state !== stateRef.current) {
+          commitState(outcome.state);
+        }
+
+        return outcome.result;
+      });
+    },
+    [commitState],
+  );
+
   const actions = useMemo<AppDataActions>(
     () => ({
       createWorkspace,
       renameWorkspace,
       setActiveWorkspace,
+      deleteWorkspace,
     }),
-    [createWorkspace, renameWorkspace, setActiveWorkspace],
+    [createWorkspace, deleteWorkspace, renameWorkspace, setActiveWorkspace],
   );
 
   return (

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   createAppDataMutationQueue,
   executeCreateWorkspace,
+  executeDeleteWorkspace,
   executeRenameWorkspace,
   executeSetActiveWorkspace,
 } from "../src/state/appDataActions.ts";
@@ -735,6 +736,270 @@ test("active selection rejects stale canonical responses without changing state"
   }
 });
 
+test("delete replaces provider state with the canonical successful response", async () => {
+  const first = workspace();
+  const second = workspace({
+    id: "workspace-2",
+    name: "Documentation",
+    createdAt: "2026-06-15T12:00:00Z",
+    updatedAt: "2026-06-15T12:00:00Z",
+  });
+  const previous = readyState({
+    workspaces: [first, second],
+    activeWorkspaceId: second.id,
+  });
+  const response = {
+    data: {
+      ...previous.data,
+      workspaces: [second],
+      activeWorkspaceId: second.id,
+    },
+    notices: [
+      {
+        code: "corrupt_data_recovered",
+        message: "Validated native notice text.",
+      },
+    ],
+  };
+  const calls = [];
+
+  const outcome = await executeDeleteWorkspace(
+    previous,
+    first.id,
+    async (id) => {
+      calls.push(id);
+      return response;
+    },
+  );
+
+  assert.deepEqual(calls, [first.id]);
+  assert.deepEqual(outcome.result, { ok: true, outcome: "deleted" });
+  assert.equal(outcome.state.status, "ready");
+  assert.equal(outcome.state.data, response.data);
+  assert.deepEqual(outcome.state.data.workspaces, [second]);
+  assert.deepEqual(outcome.state.notices, response.notices);
+  assert.notEqual(outcome.state.notices, response.notices);
+  assert.notEqual(outcome.state.notices[0], response.notices[0]);
+  assert.deepEqual(previous.data.workspaces, [first, second]);
+});
+
+test("delete relies on canonical active selection after deleting the active workspace", async () => {
+  const activeWorkspace = workspace();
+  const remainingWorkspace = workspace({
+    id: "workspace-2",
+    name: "Documentation",
+    createdAt: "2026-06-15T12:00:00Z",
+    updatedAt: "2026-06-15T12:00:00Z",
+  });
+  const previous = readyState({
+    workspaces: [activeWorkspace, remainingWorkspace],
+    activeWorkspaceId: activeWorkspace.id,
+  });
+  const canonicalResponses = [
+    {
+      data: {
+        ...previous.data,
+        workspaces: [remainingWorkspace],
+        activeWorkspaceId: null,
+      },
+      notices: [],
+    },
+    {
+      data: {
+        ...previous.data,
+        workspaces: [remainingWorkspace],
+        activeWorkspaceId: remainingWorkspace.id,
+      },
+      notices: [],
+    },
+  ];
+
+  for (const response of canonicalResponses) {
+    const outcome = await executeDeleteWorkspace(
+      previous,
+      activeWorkspace.id,
+      async () => response,
+    );
+
+    assert.deepEqual(outcome.result, { ok: true, outcome: "deleted" });
+    assert.equal(outcome.state.status, "ready");
+    assert.equal(outcome.state.data, response.data);
+    assert.equal(
+      outcome.state.data.activeWorkspaceId,
+      response.data.activeWorkspaceId,
+    );
+  }
+});
+
+test("delete rejects unavailable and missing targets without invoking the command", async () => {
+  const states = [
+    {
+      status: "loading",
+      data: null,
+      notices: [],
+      error: null,
+    },
+    {
+      status: "error",
+      data: null,
+      notices: [],
+      error: {
+        code: "storage",
+        message: "Safe provider message.",
+      },
+    },
+    readyState(),
+  ];
+
+  for (const state of states) {
+    let calls = 0;
+    const outcome = await executeDeleteWorkspace(
+      state,
+      "workspace-404",
+      async () => {
+        calls += 1;
+        throw new Error("command must not run");
+      },
+    );
+
+    assert.equal(calls, 0);
+    assert.equal(outcome.state, state);
+    assert.deepEqual(outcome.result, { ok: false, code: "internal" });
+  }
+});
+
+test("delete maps supported command failures to safe result codes", async () => {
+  const cases = [
+    ["storage", null, "storage"],
+    ["unsupported_schema", "schemaVersion", "unsupported_schema"],
+    ["internal", null, "internal"],
+  ];
+
+  for (const [code, field, expected] of cases) {
+    const previous = readyState({
+      workspaces: [workspace()],
+    });
+    const outcome = await executeDeleteWorkspace(
+      previous,
+      "workspace-1",
+      async () => {
+        throw commandError(code, field, [], "delete_workspace");
+      },
+    );
+
+    assert.deepEqual(outcome.result, { ok: false, code: expected });
+    assert.equal(outcome.state, previous);
+  }
+});
+
+test("delete maps not-found, validation, conflict, mismatches, and unexpected failures to internal", async () => {
+  const failures = [
+    commandError("not_found", "id", [], "delete_workspace"),
+    commandError("validation", "id", [], "delete_workspace"),
+    commandError("conflict", "id", [], "delete_workspace"),
+    commandError("storage", "id", [], "delete_workspace"),
+    commandError("unsupported_schema", null, [], "delete_workspace"),
+    commandError("storage", null),
+    new IpcContractError("set_active_workspace", "success"),
+    new Error("/private/path/token-value"),
+    "/private/path/raw-rejection",
+  ];
+
+  for (const failure of failures) {
+    const previous = readyState({
+      workspaces: [workspace()],
+    });
+    const outcome = await executeDeleteWorkspace(
+      previous,
+      "workspace-1",
+      async () => {
+        throw failure;
+      },
+    );
+
+    assert.deepEqual(outcome.result, { ok: false, code: "internal" });
+    assert.equal(outcome.state, previous);
+    assert.equal(JSON.stringify(outcome).includes("/private/path"), false);
+  }
+});
+
+test("delete maps malformed success and error contracts to contract", async () => {
+  for (const phase of ["success", "error"]) {
+    const previous = readyState({
+      workspaces: [workspace()],
+    });
+    const outcome = await executeDeleteWorkspace(
+      previous,
+      "workspace-1",
+      async () => {
+        throw new IpcContractError("delete_workspace", phase);
+      },
+    );
+
+    assert.deepEqual(outcome.result, { ok: false, code: "contract" });
+    assert.equal(outcome.state, previous);
+  }
+});
+
+test("delete preserves validated command failure notices without changing data", async () => {
+  const previous = readyState({
+    workspaces: [workspace()],
+    activeWorkspaceId: "workspace-1",
+  });
+  const notices = [
+    {
+      code: "corrupt_data_recovered",
+      message: "Validated but never rendered directly.",
+    },
+  ];
+
+  const outcome = await executeDeleteWorkspace(
+    previous,
+    "workspace-1",
+    async () => {
+      throw commandError("storage", null, notices, "delete_workspace");
+    },
+  );
+
+  assert.deepEqual(outcome.result, { ok: false, code: "storage" });
+  assert.equal(outcome.state.status, "ready");
+  assert.equal(outcome.state.data, previous.data);
+  assert.deepEqual(outcome.state.notices, notices);
+  assert.notEqual(outcome.state.notices, notices);
+  assert.notEqual(outcome.state.notices[0], notices[0]);
+});
+
+test("delete rejects stale canonical responses that still contain the deleted workspace", async () => {
+  const first = workspace();
+  const second = workspace({
+    id: "workspace-2",
+    name: "Documentation",
+    createdAt: "2026-06-15T12:00:00Z",
+    updatedAt: "2026-06-15T12:00:00Z",
+  });
+  const previous = readyState({
+    workspaces: [first, second],
+    activeWorkspaceId: first.id,
+  });
+  const staleResponse = {
+    data: {
+      ...previous.data,
+      workspaces: [{ ...first }, second],
+      activeWorkspaceId: first.id,
+    },
+    notices: [],
+  };
+
+  const outcome = await executeDeleteWorkspace(
+    previous,
+    first.id,
+    async () => staleResponse,
+  );
+
+  assert.deepEqual(outcome.result, { ok: false, code: "internal" });
+  assert.equal(outcome.state, previous);
+});
+
 test("shared mutation queue serializes operations in submission order", async () => {
   const queue = createAppDataMutationQueue();
   const events = [];
@@ -787,7 +1052,7 @@ test("shared mutation queue continues after an operation rejects", async () => {
   assert.deepEqual(events, ["failure", "success"]);
 });
 
-test("shared mutation queue serializes create, rename, and active selection work", async () => {
+test("shared mutation queue serializes create, rename, active selection, and delete work", async () => {
   const queue = createAppDataMutationQueue();
   const events = [];
   let releaseCreate;
@@ -811,6 +1076,11 @@ test("shared mutation queue serializes create, rename, and active selection work
     events.push("active:end");
     return "active";
   });
+  const deleteWork = queue.enqueue(async () => {
+    events.push("delete:start");
+    events.push("delete:end");
+    return "deleted";
+  });
 
   await Promise.resolve();
   assert.deepEqual(events, ["create:start"]);
@@ -819,6 +1089,7 @@ test("shared mutation queue serializes create, rename, and active selection work
   assert.equal(await create, "created");
   assert.equal(await rename, "renamed");
   assert.equal(await active, "active");
+  assert.equal(await deleteWork, "deleted");
   assert.deepEqual(events, [
     "create:start",
     "create:end",
@@ -826,5 +1097,7 @@ test("shared mutation queue serializes create, rename, and active selection work
     "rename:end",
     "active:start",
     "active:end",
+    "delete:start",
+    "delete:end",
   ]);
 });

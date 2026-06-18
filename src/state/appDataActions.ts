@@ -80,6 +80,31 @@ export type SetActiveWorkspaceCommand = (
   id: string,
 ) => Promise<AppDataResponseDto>;
 
+export type DeleteWorkspaceFailureCode =
+  | "storage"
+  | "unsupported_schema"
+  | "contract"
+  | "internal";
+
+export type DeleteWorkspaceResult =
+  | {
+      readonly ok: true;
+      readonly outcome: "deleted";
+    }
+  | {
+      readonly ok: false;
+      readonly code: DeleteWorkspaceFailureCode;
+    };
+
+export interface DeleteWorkspaceActionOutcome {
+  readonly state: AppDataState;
+  readonly result: DeleteWorkspaceResult;
+}
+
+export type DeleteWorkspaceCommand = (
+  id: string,
+) => Promise<AppDataResponseDto>;
+
 export interface AppDataMutationQueue {
   enqueue<T>(operation: () => Promise<T>): Promise<T>;
 }
@@ -193,6 +218,47 @@ export async function executeSetActiveWorkspace(
   }
 }
 
+export async function executeDeleteWorkspace(
+  state: AppDataState,
+  id: string,
+  command: DeleteWorkspaceCommand,
+): Promise<DeleteWorkspaceActionOutcome> {
+  if (state.status !== "ready") {
+    return failedDeleteWorkspaceOutcome(state, "internal");
+  }
+
+  const currentWorkspace = state.data.workspaces.find(
+    (workspace) => workspace.id === id,
+  );
+  if (currentWorkspace === undefined) {
+    return failedDeleteWorkspaceOutcome(state, "internal");
+  }
+
+  try {
+    const response = await command(id);
+    const deletedWorkspace = response.data.workspaces.find(
+      (workspace) => workspace.id === id,
+    );
+
+    if (deletedWorkspace !== undefined) {
+      return failedDeleteWorkspaceOutcome(state, "internal");
+    }
+
+    return {
+      state: createReadyAppDataState(response),
+      result: {
+        ok: true,
+        outcome: "deleted",
+      },
+    };
+  } catch (error: unknown) {
+    return failedDeleteWorkspaceOutcome(
+      stateWithFailureNotices(state, error, "delete_workspace"),
+      mapDeleteWorkspaceFailure(error),
+    );
+  }
+}
+
 export function createAppDataMutationQueue(): AppDataMutationQueue {
   let tail: Promise<void> = Promise.resolve();
 
@@ -301,10 +367,43 @@ function mapSetActiveWorkspaceFailure(
   return "internal";
 }
 
+function mapDeleteWorkspaceFailure(
+  error: unknown,
+): DeleteWorkspaceFailureCode {
+  if (error instanceof IpcContractError) {
+    return error.command === "delete_workspace" ? "contract" : "internal";
+  }
+
+  if (
+    error instanceof AppCommandError &&
+    error.command === "delete_workspace"
+  ) {
+    switch (error.code) {
+      case "storage":
+        return error.field === null ? "storage" : "internal";
+      case "unsupported_schema":
+        return error.field === "schemaVersion"
+          ? "unsupported_schema"
+          : "internal";
+      case "internal":
+      case "validation":
+      case "conflict":
+      case "not_found":
+        return "internal";
+    }
+  }
+
+  return "internal";
+}
+
 function stateWithFailureNotices(
   state: Extract<AppDataState, { status: "ready" }>,
   error: unknown,
-  command: "create_workspace" | "rename_workspace" | "set_active_workspace",
+  command:
+    | "create_workspace"
+    | "rename_workspace"
+    | "set_active_workspace"
+    | "delete_workspace",
 ): AppDataState {
   if (
     !(error instanceof AppCommandError) ||
@@ -350,6 +449,19 @@ function failedSetActiveWorkspaceOutcome(
   state: AppDataState,
   code: SetActiveWorkspaceFailureCode,
 ): SetActiveWorkspaceActionOutcome {
+  return {
+    state,
+    result: {
+      ok: false,
+      code,
+    },
+  };
+}
+
+function failedDeleteWorkspaceOutcome(
+  state: AppDataState,
+  code: DeleteWorkspaceFailureCode,
+): DeleteWorkspaceActionOutcome {
   return {
     state,
     result: {
