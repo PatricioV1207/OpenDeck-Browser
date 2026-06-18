@@ -19,6 +19,7 @@
 .info-card p,
 .empty-state p,
 .workspace-create p,
+.workspace-rename p,
 .view-disclaimer {
   margin: 0;
 }
@@ -361,6 +362,14 @@
   gap: var(--space-3);
 }
 
+.workspace-card__title {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 .workspace-card__header h3 {
   min-width: 0;
   margin: 0;
@@ -368,6 +377,101 @@
   font-size: 1rem;
   line-height: 1.4;
   overflow-wrap: anywhere;
+}
+
+.workspace-card__rename-button,
+.workspace-rename__actions button {
+  min-height: 34px;
+  padding: 7px 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.workspace-card__rename-button:not(:disabled):hover,
+.workspace-rename__actions button:not(:disabled):hover {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+.workspace-card__rename-button:disabled,
+.workspace-rename__actions button:disabled,
+.workspace-rename__field input:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.workspace-rename {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-canvas-raised);
+}
+
+.workspace-rename__field {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.workspace-rename__field label {
+  color: var(--color-text);
+  font-size: 0.8rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.workspace-rename__field input {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 11px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  background: var(--color-surface-soft);
+}
+
+.workspace-rename__field input[aria-invalid="true"] {
+  border-color: #d88686;
+}
+
+.workspace-rename__help,
+.workspace-rename__message {
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.workspace-rename__help {
+  color: var(--color-text-subtle);
+}
+
+.workspace-rename__message--error {
+  color: #e5a2a2;
+}
+
+.workspace-rename__message--success {
+  color: #8eddb5;
+}
+
+.workspace-rename__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.workspace-rename__actions button[type="submit"] {
+  border-color: rgba(99, 205, 220, 0.42);
+  color: var(--color-text-strong);
+  background: var(--color-accent-soft);
 }
 
 .workspace-card__details {
@@ -540,7 +644,8 @@
 
 @media (max-width: 520px) {
   .view-header__meta,
-  .info-card__header {
+  .info-card__header,
+  .workspace-card__header {
     align-items: flex-start;
     flex-direction: column;
   }
@@ -551,5 +656,9 @@
 
   .workspace-create {
     padding: var(--space-5);
+  }
+
+  .workspace-card__rename-button {
+    width: 100%;
   }
 }
