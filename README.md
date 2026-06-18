@@ -12,7 +12,8 @@ The repository currently contains the foundation build:
 - Separate sidebar, top bar, workspace, tab strip, and status components.
 - Frontend-only singleton tabs that reset when the application restarts.
 - Read-only Home and Settings views, a Projects view with metadata-only
-  create, rename, and active-selection controls, and a structured About view.
+  create, rename, active-selection, and delete controls, and a structured
+  About view.
 - A Rust-owned, schema-versioned app-data domain for non-sensitive settings and
   metadata-only workspaces.
 - Strict JSON storage under the operating-system application-config directory,
@@ -22,17 +23,19 @@ The repository currently contains the foundation build:
 - Typed frontend service wrappers that validate every unknown IPC response.
 - A React app-data provider that loads the validated snapshot once during
   startup, keeps it in memory, and exposes narrow workspace create, rename,
-  and active-selection actions through a shared mutation queue.
+  active-selection, and delete actions through a shared mutation queue.
 - A restrictive Content Security Policy and an empty main-window capability.
 
 The frontend loads app data, reports a safe startup status, summarizes the
 validated snapshot in Home, presents metadata-only workspace records in
 Projects, allows metadata-only workspace creation, and displays stored
 preferences in Settings. Projects also supports inline metadata-only workspace
-rename and manual active selection from the canonical provider snapshot. It
-does not apply or update persisted settings. Workspace deletion, settings
-editing and application, live repository data, GitHub, and AI features remain
-deferred.
+rename, manual active selection, and explicit-confirmation metadata deletion
+from the canonical provider snapshot. Deleting a workspace removes only local
+workspace metadata; it does not delete repositories, folders, files,
+credentials, or remote data. The app does not apply or update persisted
+settings. Settings editing and application, live repository data, GitHub, and
+AI features remain deferred.
 See [`docs/mvp.md`](docs/mvp.md) for the planned MVP scope.
 
 ## Prerequisites
