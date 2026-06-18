@@ -379,6 +379,14 @@
   overflow-wrap: anywhere;
 }
 
+.workspace-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+.workspace-card__active-button,
 .workspace-card__rename-button,
 .workspace-rename__actions button {
   min-height: 34px;
@@ -393,17 +401,39 @@
   cursor: pointer;
 }
 
+.workspace-card__active-button {
+  border-color: rgba(99, 205, 220, 0.42);
+  color: var(--color-text-strong);
+  background: var(--color-accent-soft);
+}
+
+.workspace-card__active-button:not(:disabled):hover,
 .workspace-card__rename-button:not(:disabled):hover,
 .workspace-rename__actions button:not(:disabled):hover {
   border-color: var(--color-accent);
   background: var(--color-accent-soft);
 }
 
+.workspace-card__active-button:disabled,
 .workspace-card__rename-button:disabled,
 .workspace-rename__actions button:disabled,
 .workspace-rename__field input:disabled {
   cursor: not-allowed;
   opacity: 0.62;
+}
+
+.workspace-active-selection__message {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.workspace-active-selection__message--error {
+  color: #e5a2a2;
+}
+
+.workspace-active-selection__message--success {
+  color: #8eddb5;
 }
 
 .workspace-rename {

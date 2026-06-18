@@ -12,13 +12,16 @@ import {
   createWorkspace as createWorkspaceCommand,
   loadAppData,
   renameWorkspace as renameWorkspaceCommand,
+  setActiveWorkspace as setActiveWorkspaceCommand,
 } from "../services/tauri/appDataService.ts";
 import {
   createAppDataMutationQueue,
   executeCreateWorkspace,
   executeRenameWorkspace,
+  executeSetActiveWorkspace,
   type CreateWorkspaceResult,
   type RenameWorkspaceResult,
+  type SetActiveWorkspaceResult,
 } from "./appDataActions.ts";
 import {
   createErrorAppDataState,
@@ -35,6 +38,7 @@ const loadAppDataOnce = createSingleFlightLoader(loadAppData);
 export interface AppDataActions {
   createWorkspace(name: string): Promise<CreateWorkspaceResult>;
   renameWorkspace(id: string, name: string): Promise<RenameWorkspaceResult>;
+  setActiveWorkspace(id: string): Promise<SetActiveWorkspaceResult>;
 }
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
@@ -121,12 +125,39 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [commitState],
   );
 
+  const setActiveWorkspace = useCallback(
+    async (id: string): Promise<SetActiveWorkspaceResult> => {
+      if (stateRef.current.status !== "ready") {
+        return {
+          ok: false,
+          code: "internal",
+        };
+      }
+
+      return mutationQueueRef.current.enqueue(async () => {
+        const outcome = await executeSetActiveWorkspace(
+          stateRef.current,
+          id,
+          setActiveWorkspaceCommand,
+        );
+
+        if (outcome.state !== stateRef.current) {
+          commitState(outcome.state);
+        }
+
+        return outcome.result;
+      });
+    },
+    [commitState],
+  );
+
   const actions = useMemo<AppDataActions>(
     () => ({
       createWorkspace,
       renameWorkspace,
+      setActiveWorkspace,
     }),
-    [createWorkspace, renameWorkspace],
+    [createWorkspace, renameWorkspace, setActiveWorkspace],
   );
 
   return (
