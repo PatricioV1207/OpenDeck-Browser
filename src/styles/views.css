@@ -388,6 +388,8 @@
 
 .workspace-card__active-button,
 .workspace-card__rename-button,
+.workspace-card__delete-button,
+.workspace-delete__actions button,
 .workspace-rename__actions button {
   min-height: 34px;
   padding: 7px 10px;
@@ -409,6 +411,8 @@
 
 .workspace-card__active-button:not(:disabled):hover,
 .workspace-card__rename-button:not(:disabled):hover,
+.workspace-card__delete-button:not(:disabled):hover,
+.workspace-delete__actions button:not(:disabled):hover,
 .workspace-rename__actions button:not(:disabled):hover {
   border-color: var(--color-accent);
   background: var(--color-accent-soft);
@@ -416,10 +420,18 @@
 
 .workspace-card__active-button:disabled,
 .workspace-card__rename-button:disabled,
+.workspace-card__delete-button:disabled,
+.workspace-delete__actions button:disabled,
 .workspace-rename__actions button:disabled,
 .workspace-rename__field input:disabled {
   cursor: not-allowed;
   opacity: 0.62;
+}
+
+.workspace-card__delete-button {
+  border-color: rgba(216, 134, 134, 0.46);
+  color: #f0b8b8;
+  background: rgba(216, 134, 134, 0.08);
 }
 
 .workspace-active-selection__message {
@@ -502,6 +514,60 @@
   border-color: rgba(99, 205, 220, 0.42);
   color: var(--color-text-strong);
   background: var(--color-accent-soft);
+}
+
+.workspace-delete {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid rgba(216, 134, 134, 0.34);
+  border-radius: var(--radius-sm);
+  background: rgba(216, 134, 134, 0.07);
+}
+
+.workspace-delete__copy {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.workspace-delete__copy h4 {
+  margin: 0;
+  color: var(--color-text-strong);
+  font-size: 0.92rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.workspace-delete__copy p,
+.workspace-delete__message {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.workspace-delete__copy p {
+  color: var(--color-text-subtle);
+}
+
+.workspace-delete__message--error {
+  color: #e5a2a2;
+}
+
+.workspace-delete__message--success {
+  color: #8eddb5;
+}
+
+.workspace-delete__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.workspace-delete__actions button:first-child {
+  border-color: rgba(216, 134, 134, 0.5);
+  color: #f0b8b8;
+  background: rgba(216, 134, 134, 0.1);
 }
 
 .workspace-card__details {

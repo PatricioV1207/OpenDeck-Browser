@@ -7,7 +7,10 @@ import {
   useAppData,
   useAppDataActions,
 } from "../../state/AppDataProvider";
-import type { SetActiveWorkspaceResult } from "../../state/appDataActions";
+import type {
+  DeleteWorkspaceResult,
+  SetActiveWorkspaceResult,
+} from "../../state/appDataActions";
 import type { WorkspaceDto } from "../../types/appData";
 import { CreateWorkspaceForm } from "./CreateWorkspaceForm";
 import {
@@ -21,6 +24,14 @@ import {
   getActiveWorkspaceSuccessMessage,
 } from "./workspaceActiveSelection";
 import {
+  DELETE_WORKSPACE_CONFIRMATION_COPY,
+  DELETE_WORKSPACE_SUCCESS_MESSAGE,
+  getCancelDeleteWorkspaceButtonLabel,
+  getConfirmDeleteWorkspaceButtonLabel,
+  getDeleteWorkspaceButtonLabel,
+  getDeleteWorkspaceFailureMessage,
+} from "./workspaceDelete";
+import {
   createProjectsPresentation,
   type ProjectsTimestampPresentation,
   type WorkspacePresentation,
@@ -28,7 +39,7 @@ import {
 
 export function ProjectsView() {
   const appData = useAppData();
-  const { setActiveWorkspace } = useAppDataActions();
+  const { deleteWorkspace, setActiveWorkspace } = useAppDataActions();
   const presentation = createProjectsPresentation(appData);
   const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(
     null,
@@ -41,16 +52,28 @@ export function ProjectsView() {
   );
   const [activeSelectionMessage, setActiveSelectionMessage] =
     useState<WorkspaceActiveSelectionMessage | null>(null);
+  const [deleteMessage, setDeleteMessage] =
+    useState<WorkspaceDeleteMessage | null>(null);
+  const [confirmingDeleteWorkspaceId, setConfirmingDeleteWorkspaceId] =
+    useState<string | null>(null);
   const [pendingActiveWorkspaceId, setPendingActiveWorkspaceId] = useState<
+    string | null
+  >(null);
+  const [pendingDeleteWorkspaceId, setPendingDeleteWorkspaceId] = useState<
     string | null
   >(null);
   const [focusWorkspaceId, setFocusWorkspaceId] = useState<string | null>(null);
   const [focusActiveWorkspaceId, setFocusActiveWorkspaceId] = useState<
     string | null
   >(null);
+  const [focusDeleteWorkspaceId, setFocusDeleteWorkspaceId] = useState<
+    string | null
+  >(null);
   const renameButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const activeButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const deleteButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const activeSelectionInFlightRef = useRef(false);
+  const deleteInFlightRef = useRef(false);
 
   useEffect(() => {
     if (focusWorkspaceId === null || pendingWorkspaceId !== null) {
@@ -73,14 +96,28 @@ export function ProjectsView() {
     setFocusActiveWorkspaceId(null);
   }, [focusActiveWorkspaceId, pendingActiveWorkspaceId]);
 
+  useEffect(() => {
+    if (
+      focusDeleteWorkspaceId === null ||
+      pendingDeleteWorkspaceId !== null
+    ) {
+      return;
+    }
+
+    deleteButtonRefs.current.get(focusDeleteWorkspaceId)?.focus();
+    setFocusDeleteWorkspaceId(null);
+  }, [focusDeleteWorkspaceId, pendingDeleteWorkspaceId]);
+
   function openRenameEditor(workspaceId: string) {
     if (pendingWorkspaceId !== null) {
       return;
     }
 
     setEditingWorkspaceId(workspaceId);
+    setConfirmingDeleteWorkspaceId(null);
     setRenameAnnouncement(null);
     setActiveSelectionMessage(null);
+    setDeleteMessage(null);
   }
 
   function closeRenameEditor(workspaceId: string) {
@@ -97,7 +134,58 @@ export function ProjectsView() {
         ? "Workspace renamed."
         : "Workspace name is unchanged.",
     );
+    setDeleteMessage(null);
     closeRenameEditor(workspaceId);
+  }
+
+  function openDeleteConfirmation(workspaceId: string) {
+    if (pendingDeleteWorkspaceId !== null) {
+      return;
+    }
+
+    setConfirmingDeleteWorkspaceId(workspaceId);
+    setEditingWorkspaceId(null);
+    setRenameAnnouncement(null);
+    setActiveSelectionMessage(null);
+    setDeleteMessage(null);
+  }
+
+  function cancelDeleteConfirmation(workspaceId: string) {
+    setConfirmingDeleteWorkspaceId(null);
+    setDeleteMessage(null);
+    setFocusDeleteWorkspaceId(workspaceId);
+  }
+
+  async function handleDeleteWorkspace(workspaceId: string): Promise<void> {
+    if (deleteInFlightRef.current) {
+      return;
+    }
+
+    deleteInFlightRef.current = true;
+    setPendingDeleteWorkspaceId(workspaceId);
+    setRenameAnnouncement(null);
+    setActiveSelectionMessage(null);
+    setDeleteMessage(null);
+
+    try {
+      const result = await deleteWorkspace(workspaceId);
+
+      if (result.ok) {
+        setConfirmingDeleteWorkspaceId(null);
+        setDeleteMessage({
+          workspaceId: null,
+          tone: "success",
+          text: DELETE_WORKSPACE_SUCCESS_MESSAGE,
+        });
+        return;
+      }
+
+      setDeleteMessage(createDeleteFailureMessage(workspaceId, result));
+    } finally {
+      deleteInFlightRef.current = false;
+      setPendingDeleteWorkspaceId(null);
+      setFocusDeleteWorkspaceId(workspaceId);
+    }
   }
 
   async function handleSetActiveWorkspace(
@@ -111,6 +199,7 @@ export function ProjectsView() {
     setPendingActiveWorkspaceId(workspaceId);
     setRenameAnnouncement(null);
     setActiveSelectionMessage(null);
+    setDeleteMessage(null);
 
     try {
       const result = await setActiveWorkspace(workspaceId);
@@ -149,13 +238,25 @@ export function ProjectsView() {
     activeButtonRefs.current.set(workspaceId, button);
   }
 
+  function registerDeleteButton(
+    workspaceId: string,
+    button: HTMLButtonElement | null,
+  ) {
+    if (button === null) {
+      deleteButtonRefs.current.delete(workspaceId);
+      return;
+    }
+
+    deleteButtonRefs.current.set(workspaceId, button);
+  }
+
   return (
     <div className="internal-view">
       <ViewHeader
         eyebrow="Projects"
         title="Organize maintainer context without broad local access."
-        summary="Create, rename, and select active metadata-only workspaces without scanning directories or executing repository code."
-        status="Create, rename, and active selection"
+        summary="Create, rename, select, and delete metadata-only workspaces without scanning directories or executing repository code."
+        status="Create, rename, active selection, and delete"
       />
 
       {appData.status === "ready" && (
@@ -168,10 +269,16 @@ export function ProjectsView() {
         editingWorkspaceId={editingWorkspaceId}
         pendingWorkspaceId={pendingWorkspaceId}
         pendingActiveWorkspaceId={pendingActiveWorkspaceId}
+        confirmingDeleteWorkspaceId={confirmingDeleteWorkspaceId}
+        pendingDeleteWorkspaceId={pendingDeleteWorkspaceId}
         renameAnnouncement={renameAnnouncement}
         activeSelectionMessage={activeSelectionMessage}
+        deleteMessage={deleteMessage}
         onOpenRename={openRenameEditor}
         onCancelRename={closeRenameEditor}
+        onOpenDelete={openDeleteConfirmation}
+        onCancelDelete={cancelDeleteConfirmation}
+        onConfirmDelete={handleDeleteWorkspace}
         onRenamePendingChange={(workspaceId, pending) =>
           setPendingWorkspaceId(pending ? workspaceId : null)
         }
@@ -179,6 +286,7 @@ export function ProjectsView() {
         onSetActiveWorkspace={handleSetActiveWorkspace}
         onRenameButtonRef={registerRenameButton}
         onActiveButtonRef={registerActiveButton}
+        onDeleteButtonRef={registerDeleteButton}
       />
 
       <ViewSection
@@ -218,7 +326,7 @@ export function ProjectsView() {
         </div>
         <div>
           <dt>Delete workspace</dt>
-          <dd>Deferred to a separately approved implementation step</dd>
+          <dd>Available for local metadata after explicit confirmation</dd>
         </div>
         <div>
           <dt>Repository connection</dt>
@@ -239,16 +347,28 @@ interface WorkspaceActiveSelectionMessage {
   readonly text: string;
 }
 
+interface WorkspaceDeleteMessage {
+  readonly workspaceId: string | null;
+  readonly tone: "success" | "error";
+  readonly text: string;
+}
+
 interface ProjectsContentProps {
   presentation: ReturnType<typeof createProjectsPresentation>;
   workspaces: readonly WorkspaceDto[];
   editingWorkspaceId: string | null;
   pendingWorkspaceId: string | null;
   pendingActiveWorkspaceId: string | null;
+  confirmingDeleteWorkspaceId: string | null;
+  pendingDeleteWorkspaceId: string | null;
   renameAnnouncement: string | null;
   activeSelectionMessage: WorkspaceActiveSelectionMessage | null;
+  deleteMessage: WorkspaceDeleteMessage | null;
   onOpenRename: (workspaceId: string) => void;
   onCancelRename: (workspaceId: string) => void;
+  onOpenDelete: (workspaceId: string) => void;
+  onCancelDelete: (workspaceId: string) => void;
+  onConfirmDelete: (workspaceId: string) => Promise<void>;
   onRenamePendingChange: (workspaceId: string, pending: boolean) => void;
   onRenameSuccess: (
     workspaceId: string,
@@ -263,6 +383,10 @@ interface ProjectsContentProps {
     workspaceId: string,
     button: HTMLButtonElement | null,
   ) => void;
+  onDeleteButtonRef: (
+    workspaceId: string,
+    button: HTMLButtonElement | null,
+  ) => void;
 }
 
 function ProjectsContent({
@@ -271,15 +395,22 @@ function ProjectsContent({
   editingWorkspaceId,
   pendingWorkspaceId,
   pendingActiveWorkspaceId,
+  confirmingDeleteWorkspaceId,
+  pendingDeleteWorkspaceId,
   renameAnnouncement,
   activeSelectionMessage,
+  deleteMessage,
   onOpenRename,
   onCancelRename,
+  onOpenDelete,
+  onCancelDelete,
+  onConfirmDelete,
   onRenamePendingChange,
   onRenameSuccess,
   onSetActiveWorkspace,
   onRenameButtonRef,
   onActiveButtonRef,
+  onDeleteButtonRef,
 }: ProjectsContentProps) {
   if (presentation.status === "loading") {
     return (
@@ -310,17 +441,20 @@ function ProjectsContent({
 
   if (presentation.status === "empty") {
     return (
-      <section
-        className="empty-state projects-state"
-        aria-labelledby="projects-empty-title"
-      >
-        <StatusBadge tone="planned">No saved metadata</StatusBadge>
-        <h2 id="projects-empty-title">No workspaces yet</h2>
-        <p>
-          Use the create form above to add a metadata-only workspace. The
-          workspace will appear here after Rust validates and persists it.
-        </p>
-      </section>
+      <>
+        <DeleteSuccessMessage message={deleteMessage} />
+        <section
+          className="empty-state projects-state"
+          aria-labelledby="projects-empty-title"
+        >
+          <StatusBadge tone="planned">No saved metadata</StatusBadge>
+          <h2 id="projects-empty-title">No workspaces yet</h2>
+          <p>
+            Use the create form above to add a metadata-only workspace. The
+            workspace will appear here after Rust validates and persists it.
+          </p>
+        </section>
+      </>
     );
   }
 
@@ -329,6 +463,7 @@ function ProjectsContent({
       title={presentation.countLabel}
       intro="Saved metadata is shown in canonical storage order."
     >
+      <DeleteSuccessMessage message={deleteMessage} />
       {renameAnnouncement !== null && (
         <p
           className="workspace-rename__message workspace-rename__message--success"
@@ -365,13 +500,27 @@ function ProjectsContent({
                   ? activeSelectionMessage
                   : null
               }
+              deleteConfirmationOpen={
+                confirmingDeleteWorkspaceId === workspace.id
+              }
+              deleteDisabled={pendingDeleteWorkspaceId !== null}
+              deletePending={pendingDeleteWorkspaceId === workspace.id}
+              deleteMessage={
+                deleteMessage?.workspaceId === workspace.id
+                  ? deleteMessage
+                  : null
+              }
               onOpenRename={onOpenRename}
               onCancelRename={onCancelRename}
+              onOpenDelete={onOpenDelete}
+              onCancelDelete={onCancelDelete}
+              onConfirmDelete={onConfirmDelete}
               onRenamePendingChange={onRenamePendingChange}
               onRenameSuccess={onRenameSuccess}
               onSetActiveWorkspace={onSetActiveWorkspace}
               onRenameButtonRef={onRenameButtonRef}
               onActiveButtonRef={onActiveButtonRef}
+              onDeleteButtonRef={onDeleteButtonRef}
             />
           );
         })}
@@ -389,8 +538,15 @@ interface WorkspaceCardProps {
   activeSelectionDisabled: boolean;
   activeSelectionPending: boolean;
   activeSelectionMessage: WorkspaceActiveSelectionMessage | null;
+  deleteConfirmationOpen: boolean;
+  deleteDisabled: boolean;
+  deletePending: boolean;
+  deleteMessage: WorkspaceDeleteMessage | null;
   onOpenRename: (workspaceId: string) => void;
   onCancelRename: (workspaceId: string) => void;
+  onOpenDelete: (workspaceId: string) => void;
+  onCancelDelete: (workspaceId: string) => void;
+  onConfirmDelete: (workspaceId: string) => Promise<void>;
   onRenamePendingChange: (workspaceId: string, pending: boolean) => void;
   onRenameSuccess: (
     workspaceId: string,
@@ -405,6 +561,10 @@ interface WorkspaceCardProps {
     workspaceId: string,
     button: HTMLButtonElement | null,
   ) => void;
+  onDeleteButtonRef: (
+    workspaceId: string,
+    button: HTMLButtonElement | null,
+  ) => void;
 }
 
 function WorkspaceCard({
@@ -416,23 +576,34 @@ function WorkspaceCard({
   activeSelectionDisabled,
   activeSelectionPending,
   activeSelectionMessage,
+  deleteConfirmationOpen,
+  deleteDisabled,
+  deletePending,
+  deleteMessage,
   onOpenRename,
   onCancelRename,
+  onOpenDelete,
+  onCancelDelete,
+  onConfirmDelete,
   onRenamePendingChange,
   onRenameSuccess,
   onSetActiveWorkspace,
   onRenameButtonRef,
   onActiveButtonRef,
+  onDeleteButtonRef,
 }: WorkspaceCardProps) {
   const titleId = `workspace-title-${workspace.id}`;
   const renameEditorId = getRenameEditorId(workspace.id);
   const activeSelectionMessageId = `workspace-active-message-${workspace.id}`;
+  const deleteConfirmationId = `workspace-delete-${workspace.id}`;
+  const deleteConfirmationTitleId = `workspace-delete-title-${workspace.id}`;
+  const deleteMessageId = `workspace-delete-message-${workspace.id}`;
 
   return (
     <li className="workspace-card-list__item">
       <article
         className="workspace-card"
-        aria-busy={activeSelectionPending}
+        aria-busy={activeSelectionPending || deletePending}
         aria-labelledby={titleId}
       >
         <div className="workspace-card__header">
@@ -475,6 +646,18 @@ function WorkspaceCard({
             >
               Rename
             </button>
+            <button
+              ref={(button) => onDeleteButtonRef(workspace.id, button)}
+              className="workspace-card__delete-button"
+              type="button"
+              aria-label={getDeleteWorkspaceButtonLabel(workspace.name)}
+              aria-expanded={deleteConfirmationOpen}
+              aria-controls={deleteConfirmationId}
+              disabled={deleteDisabled}
+              onClick={() => onOpenDelete(workspace.id)}
+            >
+              Delete
+            </button>
           </div>
         </div>
         {activeSelectionMessage !== null && (
@@ -503,6 +686,57 @@ function WorkspaceCard({
             onSuccess={(outcome) => onRenameSuccess(workspace.id, outcome)}
           />
         )}
+        {deleteConfirmationOpen && (
+          <section
+            id={deleteConfirmationId}
+            className="workspace-delete"
+            aria-busy={deletePending}
+            aria-labelledby={deleteConfirmationTitleId}
+          >
+            <div className="workspace-delete__copy">
+              <h4 id={deleteConfirmationTitleId}>
+                Delete {workspace.name}?
+              </h4>
+              <p>{DELETE_WORKSPACE_CONFIRMATION_COPY}</p>
+            </div>
+            {deleteMessage !== null && (
+              <p
+                id={deleteMessageId}
+                className={`workspace-delete__message workspace-delete__message--${deleteMessage.tone}`}
+                role="alert"
+              >
+                {deleteMessage.text}
+              </p>
+            )}
+            <div className="workspace-delete__actions">
+              <button
+                type="button"
+                aria-label={getConfirmDeleteWorkspaceButtonLabel(
+                  workspace.name,
+                )}
+                aria-describedby={
+                  deleteMessage === null ? undefined : deleteMessageId
+                }
+                disabled={deletePending}
+                onClick={() => {
+                  void onConfirmDelete(workspace.id);
+                }}
+              >
+                {deletePending ? "Deleting workspace" : "Delete workspace"}
+              </button>
+              <button
+                type="button"
+                aria-label={getCancelDeleteWorkspaceButtonLabel(
+                  workspace.name,
+                )}
+                disabled={deletePending}
+                onClick={() => onCancelDelete(workspace.id)}
+              >
+                Cancel
+              </button>
+            </div>
+          </section>
+        )}
         <dl className="workspace-card__details">
           <div>
             <dt>Workspace ID</dt>
@@ -528,6 +762,30 @@ function WorkspaceCard({
   );
 }
 
+function DeleteSuccessMessage({
+  message,
+}: {
+  message: WorkspaceDeleteMessage | null;
+}) {
+  if (
+    message === null ||
+    message.workspaceId !== null ||
+    message.tone !== "success"
+  ) {
+    return null;
+  }
+
+  return (
+    <p
+      className="workspace-delete__message workspace-delete__message--success"
+      role="status"
+      aria-live="polite"
+    >
+      {message.text}
+    </p>
+  );
+}
+
 function createActiveSelectionMessage(
   workspaceId: string,
   result: SetActiveWorkspaceResult,
@@ -544,6 +802,17 @@ function createActiveSelectionMessage(
     workspaceId,
     tone: "error",
     text: getActiveWorkspaceFailureMessage(result.code),
+  };
+}
+
+function createDeleteFailureMessage(
+  workspaceId: string,
+  result: Extract<DeleteWorkspaceResult, { ok: false }>,
+): WorkspaceDeleteMessage {
+  return {
+    workspaceId,
+    tone: "error",
+    text: getDeleteWorkspaceFailureMessage(result.code),
   };
 }
 

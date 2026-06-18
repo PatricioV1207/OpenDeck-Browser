@@ -79,12 +79,13 @@ permission.
 - Do not retain malformed raw IPC values in frontend errors.
 
 The React app-data provider calls the `load_app_data` wrapper during startup
-and exposes only the approved `create_workspace`, `rename_workspace`, and
-`set_active_workspace` mutations through a separate action context. Results
-are reduced to validated in-memory data, fixed safe failure categories, and
-validated notice codes. A single-flight promise prevents duplicate startup
-invokes during React Strict Mode remounts, and one shared queue serializes
-create, rename, and active-selection operations.
+and exposes only the approved `create_workspace`, `rename_workspace`,
+`set_active_workspace`, and `delete_workspace` mutations through a separate
+action context. Results are reduced to validated in-memory data, fixed safe
+failure categories, and validated notice codes. A single-flight promise
+prevents duplicate startup invokes during React Strict Mode remounts, and one
+shared queue serializes create, rename, active-selection, and delete
+operations.
 
 Home consumes only the provider state. Its read-only presentation maps safe
 provider failure codes to fixed Home-owned text, ignores notices and backend
@@ -92,17 +93,19 @@ messages, and displays only workspace count, active workspace name, stored
 color mode, and a fixed app-data status. It exposes no commands, controls,
 links, or retry behavior.
 
-Projects consumes provider state and the narrow create, rename, and
-active-selection actions. Its forms send only a canonical workspace ID and
-normalized workspace name, while active-selection controls send only a
-canonical workspace ID. Projects performs local UX validation where useful and
-relies on Rust for authoritative validation and persistence. Rename uses one
-inline editor at a time, and active selection remains a metadata-only
-operation. Projects performs no optimistic metadata or active-marker update
-and installs only the canonical validated response. It maps action failure
-codes to fixed frontend-owned text and never renders backend messages,
-rejected values, notice text, paths, diagnostics, or command details. It
-requests no repository, folder, path, credential, or remote-account data.
+Projects consumes provider state and the narrow create, rename,
+active-selection, and delete actions. Its forms send only a canonical
+workspace ID and normalized workspace name, active-selection controls send only
+a canonical workspace ID, and delete controls send only a canonical workspace
+ID after explicit confirmation. Projects performs local UX validation where
+useful and relies on Rust for authoritative validation and persistence. Rename
+uses one inline editor at a time, active selection remains a metadata-only
+operation, and deletion removes only local workspace metadata. Projects
+performs no optimistic metadata, active-marker, or removal update and installs
+only the canonical validated response. It maps action failure codes to fixed
+frontend-owned text and never renders backend messages, rejected values, notice
+text, paths, diagnostics, or command details. It requests no repository,
+folder, path, credential, or remote-account data.
 
 Settings also consumes only the provider state. Its read-only presentation maps
 safe provider failure codes to fixed Settings-owned text, ignores notices and
@@ -217,17 +220,17 @@ The Step 23 app-data boundary was audited with these findings:
   implementation exists.
 - React accesses typed app-data wrappers only through `AppDataProvider`.
 - The provider exposes only the approved `create_workspace`,
-  `rename_workspace`, and `set_active_workspace` mutations to React and
-  installs only validated canonical responses.
+  `rename_workspace`, `set_active_workspace`, and `delete_workspace`
+  mutations to React and installs only validated canonical responses.
 - Home reads the validated snapshot from `AppDataProvider` and presents a safe
   summary without controls or mutation behavior.
-- Projects creates, renames, and selects active metadata-only workspaces
-  through `AppDataProvider` and presents returned canonical metadata. Delete
-  remains unavailable.
+- Projects creates, renames, selects active, and deletes metadata-only
+  workspaces through `AppDataProvider` and presents returned canonical
+  metadata.
 - Settings reads validated non-sensitive preferences from `AppDataProvider`
   and presents them without editing or application behavior.
-- Workspace deletion and all settings mutations remain disconnected from React
-  components.
+- Repository or filesystem deletion and all settings mutations remain
+  disconnected from React components.
 - Persisted presentation settings are loaded but are not applied to the UI.
 
 ## Requirements before GitHub integration
