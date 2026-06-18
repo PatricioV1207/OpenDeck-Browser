@@ -11,7 +11,7 @@ The repository currently contains the foundation build:
 - A React and TypeScript application layout built with Vite.
 - Separate sidebar, top bar, workspace, tab strip, and status components.
 - Frontend-only singleton tabs that reset when the application restarts.
-- Read-only Home and Settings views, a create-enabled Projects view, and a
+- Read-only Home and Settings views, a create-and-rename Projects view, and a
   structured About view.
 - A Rust-owned, schema-versioned app-data domain for non-sensitive settings and
   metadata-only workspaces.
@@ -21,15 +21,17 @@ The repository currently contains the foundation build:
 - Seven narrow Tauri commands with safe DTOs, notices, and error codes.
 - Typed frontend service wrappers that validate every unknown IPC response.
 - A React app-data provider that loads the validated snapshot once during
-  startup, keeps it in memory, and exposes a narrow workspace-creation action.
+  startup, keeps it in memory, and exposes narrow workspace create and rename
+  actions through a shared mutation queue.
 - A restrictive Content Security Policy and an empty main-window capability.
 
 The frontend loads app data, reports a safe startup status, summarizes the
 validated snapshot in Home, presents metadata-only workspace records in
 Projects, allows metadata-only workspace creation, and displays stored
-preferences in Settings. It does not apply or update persisted settings.
-Workspace rename, deletion, manual active selection, settings editing and
-application, live repository data, GitHub, and AI features remain deferred.
+preferences in Settings. Projects also supports inline metadata-only workspace
+rename. It does not apply or update persisted settings. Workspace deletion,
+manual active selection, settings editing and application, live repository
+data, GitHub, and AI features remain deferred.
 See [`docs/mvp.md`](docs/mvp.md) for the planned MVP scope.
 
 ## Prerequisites

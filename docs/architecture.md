@@ -13,7 +13,7 @@ The current foundation is intentionally small:
 - One React application shell.
 - Separate sidebar, top bar, workspace, tab strip, and status components.
 - Frontend-only singleton tabs managed by React context and a reducer.
-- Feature-owned read-only Home and Settings views, a create-enabled Projects
+- Feature-owned read-only Home and Settings views, a create-and-rename Projects
   view, and an About view.
 - Small shared presentation components for view headers, sections, status
   labels, and information cards.
@@ -24,19 +24,20 @@ The current foundation is intentionally small:
 - Seven narrow Tauri commands registered through one invoke handler.
 - Typed frontend DTOs, runtime guards, and command-specific service wrappers.
 - A React app-data provider that performs one startup load, stores the
-  validated snapshot and notices in memory, and exposes one narrow
-  workspace-creation action.
+  validated snapshot and notices in memory, and exposes narrow workspace
+  create and rename actions through a shared mutation queue.
 - One main-window capability with no granted permissions.
 - No Tauri plugins, remote content, credential storage, or network
   integrations.
 
 GitHub and AI integrations are not part of the foundation implementation.
-React uses `load_app_data` during startup and `create_workspace` through the
-provider action boundary. Home presents a safe summary of the validated
-snapshot, Projects can create and present metadata-only workspaces, and
-Settings presents validated stored preferences. Rename, deletion, manual
-active-workspace selection, settings mutations, persisted-setting application,
-live repository data, and broader persistence controls remain deferred.
+React uses `load_app_data` during startup and the create and rename commands
+through the provider action boundary. Home presents a safe summary of the
+validated snapshot, Projects can create, rename, and present metadata-only
+workspaces, and Settings presents validated stored preferences. Deletion,
+manual active-workspace selection, settings mutations, persisted-setting
+application, live repository data, and broader persistence controls remain
+deferred.
 
 ## Architecture principles
 
@@ -84,16 +85,18 @@ The app-data IPC boundary is implemented under `types` and `services/tauri`:
 
 `AppDataProvider` calls the existing `loadAppData()` wrapper during startup,
 exposes a guarded data context with `loading`, `ready`, and `error` states, and
-exposes a separate action context containing only `createWorkspace(name)`.
+exposes a separate action context containing `createWorkspace(name)` and
+`renameWorkspace(id, name)`.
 The provider stores the canonical `AppDataDto` snapshot and validated notices
 in React memory. A module-scoped single-flight promise ensures React Strict
 Mode remounts share one startup request per JavaScript application runtime.
 
 The shell remains visible for every state. The status panel uses fixed
 frontend-owned loading, ready, error, and recovery text. It does not render raw
-rejections or arbitrary notice messages. The provider rejects creation before
-app data is ready, serializes creation attempts, replaces state only with a
-validated canonical command response, and reduces failures to safe codes.
+rejections or arbitrary notice messages. The provider rejects mutations before
+app data is ready, serializes create and rename operations through one shared
+queue, replaces state only with validated canonical command responses, and
+reduces failures to safe codes.
 
 Home maps the provider state into fixed loading, error, and ready
 presentations. The ready summary shows the workspace count, active workspace
@@ -103,12 +106,13 @@ messages, imports no Tauri service, exposes no controls, and does not mutate
 provider state.
 
 Projects maps the provider state into fixed loading, error, empty, and ready
-presentations. When app data is ready, its create form validates and trims a
-workspace name for immediate UX, then delegates to the provider action. Rust
-remains authoritative and returns the canonical ID, timestamps, ordering, and
-active selection. Ready workspaces show only the name, ID, UTC creation and
-update timestamps, and an active marker. Projects does not import the Tauri
-service or call `invoke` directly.
+presentations. Its create and inline rename forms validate and trim workspace
+names for immediate UX, then delegate to provider actions. Only one rename
+editor is open at a time. Rust remains authoritative and returns canonical
+names, IDs, timestamps, ordering, and active selection. Exact no-op and
+case-only renames are allowed; no-op results preserve the stored update
+timestamp. Projects does not import the Tauri service or call `invoke`
+directly.
 
 Settings maps the provider state into fixed loading, error, and ready
 presentations. Ready values show the stored color mode, sidebar presentation,
@@ -282,7 +286,7 @@ cross-feature state belongs in `state`, and IPC access belongs exclusively in
 
 ## Next implementation order
 
-1. Connect approved workspace rename and deletion behavior to Projects.
+1. Connect approved workspace deletion behavior to Projects.
 2. Design manual active-workspace selection.
 3. Connect approved non-sensitive settings mutations to Settings.
 4. Apply approved stored presentation settings during bootstrap.

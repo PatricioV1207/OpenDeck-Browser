@@ -50,7 +50,7 @@ export function AboutView() {
           <div>
             <dt>Native application commands</dt>
             <dd>
-              App-data loading and metadata-only workspace creation enabled
+              App-data loading, workspace creation, and workspace rename enabled
             </dd>
           </div>
         </dl>

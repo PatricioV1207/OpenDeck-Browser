@@ -79,11 +79,11 @@ permission.
 - Do not retain malformed raw IPC values in frontend errors.
 
 The React app-data provider calls the `load_app_data` wrapper during startup
-and exposes only the approved `create_workspace` mutation through a separate
-action context. Results are reduced to validated in-memory data, fixed safe
-failure categories, and validated notice codes. A single-flight promise
-prevents duplicate startup invokes during React Strict Mode remounts, and the
-provider serializes workspace-creation attempts.
+and exposes only the approved `create_workspace` and `rename_workspace`
+mutations through a separate action context. Results are reduced to validated
+in-memory data, fixed safe failure categories, and validated notice codes. A
+single-flight promise prevents duplicate startup invokes during React Strict
+Mode remounts, and one shared queue serializes create and rename operations.
 
 Home consumes only the provider state. Its read-only presentation maps safe
 provider failure codes to fixed Home-owned text, ignores notices and backend
@@ -91,12 +91,14 @@ messages, and displays only workspace count, active workspace name, stored
 color mode, and a fixed app-data status. It exposes no commands, controls,
 links, or retry behavior.
 
-Projects consumes provider state and the narrow creation action. Its form sends
-only a normalized workspace name, performs local UX validation, and relies on
-Rust for authoritative validation and persistence. Projects maps action
-failure codes to fixed frontend-owned text and never renders backend messages,
-rejected values, notices, paths, or diagnostics. It requests no repository,
-folder, path, credential, or remote-account data.
+Projects consumes provider state and the narrow create and rename actions. Its
+forms send only a canonical workspace ID and normalized workspace name,
+perform local UX validation, and rely on Rust for authoritative validation and
+persistence. Rename uses one inline editor at a time, performs no optimistic
+metadata update, and installs only the canonical validated response. Projects
+maps action failure codes to fixed frontend-owned text and never renders
+backend messages, rejected values, notice text, paths, or diagnostics. It
+requests no repository, folder, path, credential, or remote-account data.
 
 Settings also consumes only the provider state. Its read-only presentation maps
 safe provider failure codes to fixed Settings-owned text, ignores notices and
@@ -210,13 +212,14 @@ The Step 23 app-data boundary was audited with these findings:
 - No remote content, external-link behavior, GitHub implementation, or AI
   implementation exists.
 - React accesses typed app-data wrappers only through `AppDataProvider`.
-- The provider exposes only the approved `create_workspace` mutation to React
-  and installs only validated canonical responses.
+- The provider exposes only the approved `create_workspace` and
+  `rename_workspace` mutations to React and installs only validated canonical
+  responses.
 - Home reads the validated snapshot from `AppDataProvider` and presents a safe
   summary without controls or mutation behavior.
-- Projects creates metadata-only workspaces through `AppDataProvider` and
-  presents returned canonical metadata. Rename, delete, and manual active
-  selection remain unavailable.
+- Projects creates and renames metadata-only workspaces through
+  `AppDataProvider` and presents returned canonical metadata. Delete and manual
+  active selection remain unavailable.
 - Settings reads validated non-sensitive preferences from `AppDataProvider`
   and presents them without editing or application behavior.
 - All workspace mutations except creation and all settings mutations remain
