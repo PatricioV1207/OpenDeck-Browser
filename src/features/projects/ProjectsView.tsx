@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { InfoCard } from "../../components/ui/InfoCard";
 import { StatusBadge } from "../../components/ui/StatusBadge";
 import { ViewHeader } from "../../components/ui/ViewHeader";
@@ -69,9 +69,17 @@ export function ProjectsView() {
   const [focusDeleteWorkspaceId, setFocusDeleteWorkspaceId] = useState<
     string | null
   >(null);
+  const [focusDeleteConfirmationId, setFocusDeleteConfirmationId] =
+    useState<string | null>(null);
+  const [focusDeleteSuccessMessage, setFocusDeleteSuccessMessage] =
+    useState(false);
   const renameButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const activeButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const deleteButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const deleteConfirmButtonRefs = useRef(
+    new Map<string, HTMLButtonElement>(),
+  );
+  const deleteSuccessMessageRef = useRef<HTMLParagraphElement | null>(null);
   const activeSelectionInFlightRef = useRef(false);
   const deleteInFlightRef = useRef(false);
 
@@ -107,6 +115,29 @@ export function ProjectsView() {
     deleteButtonRefs.current.get(focusDeleteWorkspaceId)?.focus();
     setFocusDeleteWorkspaceId(null);
   }, [focusDeleteWorkspaceId, pendingDeleteWorkspaceId]);
+
+  useEffect(() => {
+    if (
+      focusDeleteConfirmationId === null ||
+      pendingDeleteWorkspaceId !== null
+    ) {
+      return;
+    }
+
+    deleteConfirmButtonRefs.current
+      .get(focusDeleteConfirmationId)
+      ?.focus();
+    setFocusDeleteConfirmationId(null);
+  }, [focusDeleteConfirmationId, pendingDeleteWorkspaceId]);
+
+  useEffect(() => {
+    if (!focusDeleteSuccessMessage || deleteMessage?.workspaceId !== null) {
+      return;
+    }
+
+    deleteSuccessMessageRef.current?.focus();
+    setFocusDeleteSuccessMessage(false);
+  }, [deleteMessage, focusDeleteSuccessMessage]);
 
   function openRenameEditor(workspaceId: string) {
     if (pendingWorkspaceId !== null) {
@@ -177,14 +208,15 @@ export function ProjectsView() {
           tone: "success",
           text: DELETE_WORKSPACE_SUCCESS_MESSAGE,
         });
+        setFocusDeleteSuccessMessage(true);
         return;
       }
 
       setDeleteMessage(createDeleteFailureMessage(workspaceId, result));
+      setFocusDeleteConfirmationId(workspaceId);
     } finally {
       deleteInFlightRef.current = false;
       setPendingDeleteWorkspaceId(null);
-      setFocusDeleteWorkspaceId(workspaceId);
     }
   }
 
@@ -238,6 +270,18 @@ export function ProjectsView() {
     activeButtonRefs.current.set(workspaceId, button);
   }
 
+  function registerDeleteConfirmButton(
+    workspaceId: string,
+    button: HTMLButtonElement | null,
+  ) {
+    if (button === null) {
+      deleteConfirmButtonRefs.current.delete(workspaceId);
+      return;
+    }
+
+    deleteConfirmButtonRefs.current.set(workspaceId, button);
+  }
+
   function registerDeleteButton(
     workspaceId: string,
     button: HTMLButtonElement | null,
@@ -274,6 +318,7 @@ export function ProjectsView() {
         renameAnnouncement={renameAnnouncement}
         activeSelectionMessage={activeSelectionMessage}
         deleteMessage={deleteMessage}
+        deleteSuccessMessageRef={deleteSuccessMessageRef}
         onOpenRename={openRenameEditor}
         onCancelRename={closeRenameEditor}
         onOpenDelete={openDeleteConfirmation}
@@ -287,6 +332,7 @@ export function ProjectsView() {
         onRenameButtonRef={registerRenameButton}
         onActiveButtonRef={registerActiveButton}
         onDeleteButtonRef={registerDeleteButton}
+        onDeleteConfirmButtonRef={registerDeleteConfirmButton}
       />
 
       <ViewSection
@@ -364,6 +410,7 @@ interface ProjectsContentProps {
   renameAnnouncement: string | null;
   activeSelectionMessage: WorkspaceActiveSelectionMessage | null;
   deleteMessage: WorkspaceDeleteMessage | null;
+  deleteSuccessMessageRef: RefObject<HTMLParagraphElement | null>;
   onOpenRename: (workspaceId: string) => void;
   onCancelRename: (workspaceId: string) => void;
   onOpenDelete: (workspaceId: string) => void;
@@ -387,6 +434,10 @@ interface ProjectsContentProps {
     workspaceId: string,
     button: HTMLButtonElement | null,
   ) => void;
+  onDeleteConfirmButtonRef: (
+    workspaceId: string,
+    button: HTMLButtonElement | null,
+  ) => void;
 }
 
 function ProjectsContent({
@@ -400,6 +451,7 @@ function ProjectsContent({
   renameAnnouncement,
   activeSelectionMessage,
   deleteMessage,
+  deleteSuccessMessageRef,
   onOpenRename,
   onCancelRename,
   onOpenDelete,
@@ -411,6 +463,7 @@ function ProjectsContent({
   onRenameButtonRef,
   onActiveButtonRef,
   onDeleteButtonRef,
+  onDeleteConfirmButtonRef,
 }: ProjectsContentProps) {
   if (presentation.status === "loading") {
     return (
@@ -442,7 +495,10 @@ function ProjectsContent({
   if (presentation.status === "empty") {
     return (
       <>
-        <DeleteSuccessMessage message={deleteMessage} />
+        <DeleteSuccessMessage
+          message={deleteMessage}
+          messageRef={deleteSuccessMessageRef}
+        />
         <section
           className="empty-state projects-state"
           aria-labelledby="projects-empty-title"
@@ -463,7 +519,10 @@ function ProjectsContent({
       title={presentation.countLabel}
       intro="Saved metadata is shown in canonical storage order."
     >
-      <DeleteSuccessMessage message={deleteMessage} />
+      <DeleteSuccessMessage
+        message={deleteMessage}
+        messageRef={deleteSuccessMessageRef}
+      />
       {renameAnnouncement !== null && (
         <p
           className="workspace-rename__message workspace-rename__message--success"
@@ -521,6 +580,7 @@ function ProjectsContent({
               onRenameButtonRef={onRenameButtonRef}
               onActiveButtonRef={onActiveButtonRef}
               onDeleteButtonRef={onDeleteButtonRef}
+              onDeleteConfirmButtonRef={onDeleteConfirmButtonRef}
             />
           );
         })}
@@ -565,6 +625,10 @@ interface WorkspaceCardProps {
     workspaceId: string,
     button: HTMLButtonElement | null,
   ) => void;
+  onDeleteConfirmButtonRef: (
+    workspaceId: string,
+    button: HTMLButtonElement | null,
+  ) => void;
 }
 
 function WorkspaceCard({
@@ -591,6 +655,7 @@ function WorkspaceCard({
   onRenameButtonRef,
   onActiveButtonRef,
   onDeleteButtonRef,
+  onDeleteConfirmButtonRef,
 }: WorkspaceCardProps) {
   const titleId = `workspace-title-${workspace.id}`;
   const renameEditorId = getRenameEditorId(workspace.id);
@@ -710,6 +775,9 @@ function WorkspaceCard({
             )}
             <div className="workspace-delete__actions">
               <button
+                ref={(button) =>
+                  onDeleteConfirmButtonRef(workspace.id, button)
+                }
                 type="button"
                 aria-label={getConfirmDeleteWorkspaceButtonLabel(
                   workspace.name,
@@ -764,8 +832,10 @@ function WorkspaceCard({
 
 function DeleteSuccessMessage({
   message,
+  messageRef,
 }: {
   message: WorkspaceDeleteMessage | null;
+  messageRef: RefObject<HTMLParagraphElement | null>;
 }) {
   if (
     message === null ||
@@ -777,9 +847,11 @@ function DeleteSuccessMessage({
 
   return (
     <p
+      ref={messageRef}
       className="workspace-delete__message workspace-delete__message--success"
       role="status"
       aria-live="polite"
+      tabIndex={-1}
     >
       {message.text}
     </p>

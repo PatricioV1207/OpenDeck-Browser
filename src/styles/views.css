@@ -757,4 +757,10 @@
   .workspace-card__rename-button {
     width: 100%;
   }
+
+  .workspace-card__actions,
+  .workspace-card__active-button,
+  .workspace-card__delete-button {
+    width: 100%;
+  }
 }

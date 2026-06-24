@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useAppDataActions } from "../../state/AppDataProvider";
 import type {
   RenameWorkspaceFailureCode,
@@ -30,9 +30,11 @@ export function RenameWorkspaceForm({
   onSuccess,
 }: RenameWorkspaceFormProps) {
   const { renameWorkspace } = useAppDataActions();
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
   const [name, setName] = useState(workspace.name);
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [focusNameAfterPending, setFocusNameAfterPending] = useState(false);
   const submissionInFlightRef = useRef(false);
 
   const editorId = getRenameEditorId(workspace.id);
@@ -47,6 +49,15 @@ export function RenameWorkspaceForm({
   ]
     .filter((id): id is string => id !== null)
     .join(" ");
+
+  useEffect(() => {
+    if (!focusNameAfterPending || pending) {
+      return;
+    }
+
+    nameInputRef.current?.focus();
+    setFocusNameAfterPending(false);
+  }, [focusNameAfterPending, pending]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -63,6 +74,7 @@ export function RenameWorkspaceForm({
     if (!validation.ok) {
       setFieldError(validation.message);
       setSubmissionError(null);
+      nameInputRef.current?.focus();
       return;
     }
 
@@ -83,8 +95,10 @@ export function RenameWorkspaceForm({
         successOutcome = result.outcome;
       } else if (isNameFailure(result.code)) {
         setFieldError(getRenameWorkspaceFailureMessage(result.code));
+        setFocusNameAfterPending(true);
       } else {
         setSubmissionError(getRenameWorkspaceFailureMessage(result.code));
+        setFocusNameAfterPending(true);
       }
     } finally {
       submissionInFlightRef.current = false;
@@ -114,6 +128,7 @@ export function RenameWorkspaceForm({
           New name for {workspace.name}
         </label>
         <input
+          ref={nameInputRef}
           id={inputId}
           name={`workspaceName-${workspace.id}`}
           type="text"
