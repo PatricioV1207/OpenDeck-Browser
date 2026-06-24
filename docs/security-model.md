@@ -79,13 +79,12 @@ permission.
 - Do not retain malformed raw IPC values in frontend errors.
 
 The React app-data provider calls the `load_app_data` wrapper during startup
-and exposes only the approved `create_workspace`, `rename_workspace`,
-`set_active_workspace`, and `delete_workspace` mutations through a separate
-action context. Results are reduced to validated in-memory data, fixed safe
-failure categories, and validated notice codes. A single-flight promise
-prevents duplicate startup invokes during React Strict Mode remounts, and one
-shared queue serializes create, rename, active-selection, and delete
-operations.
+and exposes approved workspace mutations plus a disconnected `updateSettings`
+action through a separate action context. Results are reduced to validated
+in-memory data, fixed safe failure categories, and validated notice codes. A
+single-flight promise prevents duplicate startup invokes during React Strict
+Mode remounts, and one shared queue serializes workspace and settings
+operations. Settings controls and visual application remain deferred.
 
 Home consumes only the provider state. Its read-only presentation maps safe
 provider failure codes to fixed Home-owned text, ignores notices and backend

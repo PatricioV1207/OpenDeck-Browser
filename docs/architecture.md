@@ -89,7 +89,9 @@ The app-data IPC boundary is implemented under `types` and `services/tauri`:
 exposes a guarded data context with `loading`, `ready`, and `error` states, and
 exposes a separate action context containing `createWorkspace(name)`,
 `renameWorkspace(id, name)`, `setActiveWorkspace(id)`, and
-`deleteWorkspace(id)`.
+`deleteWorkspace(id)`. The action context also exposes a disconnected
+`updateSettings(patch)` boundary; Settings controls and visual application
+remain deferred.
 The provider stores the canonical `AppDataDto` snapshot and validated notices
 in React memory. A module-scoped single-flight promise ensures React Strict
 Mode remounts share one startup request per JavaScript application runtime.
@@ -97,9 +99,9 @@ Mode remounts share one startup request per JavaScript application runtime.
 The shell remains visible for every state. The status panel uses fixed
 frontend-owned loading, ready, error, and recovery text. It does not render raw
 rejections or arbitrary notice messages. The provider rejects mutations before
-app data is ready, serializes create, rename, active-selection, and delete
-operations through one shared queue, replaces state only with validated
-canonical command responses, and reduces failures to safe codes.
+app data is ready, serializes workspace and settings operations through one
+shared queue, replaces state only with validated canonical command responses,
+and reduces failures to safe codes.
 
 Home maps the provider state into fixed loading, error, and ready
 presentations. The ready summary shows the workspace count, active workspace

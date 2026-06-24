@@ -14,6 +14,7 @@ import {
   loadAppData,
   renameWorkspace as renameWorkspaceCommand,
   setActiveWorkspace as setActiveWorkspaceCommand,
+  updateSettings as updateSettingsCommand,
 } from "../services/tauri/appDataService.ts";
 import {
   createAppDataMutationQueue,
@@ -21,11 +22,14 @@ import {
   executeDeleteWorkspace,
   executeRenameWorkspace,
   executeSetActiveWorkspace,
+  executeUpdateSettings,
   type CreateWorkspaceResult,
   type DeleteWorkspaceResult,
   type RenameWorkspaceResult,
   type SetActiveWorkspaceResult,
+  type UpdateSettingsResult,
 } from "./appDataActions.ts";
+import type { AppSettingsPatch } from "../types/appData.ts";
 import {
   createErrorAppDataState,
   createReadyAppDataState,
@@ -43,6 +47,7 @@ export interface AppDataActions {
   renameWorkspace(id: string, name: string): Promise<RenameWorkspaceResult>;
   setActiveWorkspace(id: string): Promise<SetActiveWorkspaceResult>;
   deleteWorkspace(id: string): Promise<DeleteWorkspaceResult>;
+  updateSettings(patch: AppSettingsPatch): Promise<UpdateSettingsResult>;
 }
 
 export function AppDataProvider({ children }: { children: ReactNode }) {
@@ -181,14 +186,47 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [commitState],
   );
 
+  const updateSettings = useCallback(
+    async (patch: AppSettingsPatch): Promise<UpdateSettingsResult> => {
+      if (stateRef.current.status !== "ready") {
+        return {
+          ok: false,
+          code: "internal",
+        };
+      }
+
+      return mutationQueueRef.current.enqueue(async () => {
+        const outcome = await executeUpdateSettings(
+          stateRef.current,
+          patch,
+          updateSettingsCommand,
+        );
+
+        if (outcome.state !== stateRef.current) {
+          commitState(outcome.state);
+        }
+
+        return outcome.result;
+      });
+    },
+    [commitState],
+  );
+
   const actions = useMemo<AppDataActions>(
     () => ({
       createWorkspace,
       renameWorkspace,
       setActiveWorkspace,
       deleteWorkspace,
+      updateSettings,
     }),
-    [createWorkspace, deleteWorkspace, renameWorkspace, setActiveWorkspace],
+    [
+      createWorkspace,
+      deleteWorkspace,
+      renameWorkspace,
+      setActiveWorkspace,
+      updateSettings,
+    ],
   );
 
   return (

@@ -5,6 +5,8 @@ import {
   IpcContractError,
   type AppDataResponseDto,
   type AppNoticeDto,
+  type AppSettingsDto,
+  type AppSettingsPatch,
 } from "../types/appData.ts";
 
 export type CreateWorkspaceFailureCode =
@@ -103,6 +105,32 @@ export interface DeleteWorkspaceActionOutcome {
 
 export type DeleteWorkspaceCommand = (
   id: string,
+) => Promise<AppDataResponseDto>;
+
+export type UpdateSettingsFailureCode =
+  | "validation"
+  | "storage"
+  | "unsupported_schema"
+  | "contract"
+  | "internal";
+
+export type UpdateSettingsResult =
+  | {
+      readonly ok: true;
+      readonly outcome: "updated" | "unchanged";
+    }
+  | {
+      readonly ok: false;
+      readonly code: UpdateSettingsFailureCode;
+    };
+
+export interface UpdateSettingsActionOutcome {
+  readonly state: AppDataState;
+  readonly result: UpdateSettingsResult;
+}
+
+export type UpdateSettingsCommand = (
+  patch: AppSettingsPatch,
 ) => Promise<AppDataResponseDto>;
 
 export interface AppDataMutationQueue {
@@ -259,6 +287,48 @@ export async function executeDeleteWorkspace(
   }
 }
 
+export async function executeUpdateSettings(
+  state: AppDataState,
+  patch: AppSettingsPatch,
+  command: UpdateSettingsCommand,
+): Promise<UpdateSettingsActionOutcome> {
+  if (state.status !== "ready" || !isSupportedSettingsPatch(patch)) {
+    return failedUpdateSettingsOutcome(
+      state,
+      state.status === "ready" ? "validation" : "internal",
+    );
+  }
+
+  const expectedSettings: AppSettingsDto = {
+    ...state.data.settings,
+    ...patch,
+  };
+  const outcome = settingsEqual(state.data.settings, expectedSettings)
+    ? "unchanged"
+    : "updated";
+
+  try {
+    const response = await command(patch);
+
+    if (!settingsEqual(response.data.settings, expectedSettings)) {
+      return failedUpdateSettingsOutcome(state, "internal");
+    }
+
+    return {
+      state: createReadyAppDataState(response),
+      result: {
+        ok: true,
+        outcome,
+      },
+    };
+  } catch (error: unknown) {
+    return failedUpdateSettingsOutcome(
+      stateWithFailureNotices(state, error, "update_settings"),
+      mapUpdateSettingsFailure(error),
+    );
+  }
+}
+
 export function createAppDataMutationQueue(): AppDataMutationQueue {
   let tail: Promise<void> = Promise.resolve();
 
@@ -396,6 +466,36 @@ function mapDeleteWorkspaceFailure(
   return "internal";
 }
 
+function mapUpdateSettingsFailure(
+  error: unknown,
+): UpdateSettingsFailureCode {
+  if (error instanceof IpcContractError) {
+    return error.command === "update_settings" ? "contract" : "internal";
+  }
+
+  if (
+    error instanceof AppCommandError &&
+    error.command === "update_settings"
+  ) {
+    switch (error.code) {
+      case "validation":
+        return error.field === "patch" ? "validation" : "internal";
+      case "storage":
+        return error.field === null ? "storage" : "internal";
+      case "unsupported_schema":
+        return error.field === "schemaVersion"
+          ? "unsupported_schema"
+          : "internal";
+      case "internal":
+      case "not_found":
+      case "conflict":
+        return "internal";
+    }
+  }
+
+  return "internal";
+}
+
 function stateWithFailureNotices(
   state: Extract<AppDataState, { status: "ready" }>,
   error: unknown,
@@ -403,7 +503,8 @@ function stateWithFailureNotices(
     | "create_workspace"
     | "rename_workspace"
     | "set_active_workspace"
-    | "delete_workspace",
+    | "delete_workspace"
+    | "update_settings",
 ): AppDataState {
   if (
     !(error instanceof AppCommandError) ||
@@ -469,6 +570,53 @@ function failedDeleteWorkspaceOutcome(
       code,
     },
   };
+}
+
+function failedUpdateSettingsOutcome(
+  state: AppDataState,
+  code: UpdateSettingsFailureCode,
+): UpdateSettingsActionOutcome {
+  return {
+    state,
+    result: {
+      ok: false,
+      code,
+    },
+  };
+}
+
+function isSupportedSettingsPatch(patch: AppSettingsPatch): boolean {
+  if (typeof patch !== "object" || patch === null || Array.isArray(patch)) {
+    return false;
+  }
+
+  const entries = Object.entries(patch);
+  if (entries.length === 0) {
+    return false;
+  }
+
+  return entries.every(([key, value]) => {
+    switch (key) {
+      case "colorMode":
+        return value === "system" || value === "light" || value === "dark";
+      case "sidebarCollapsed":
+      case "statusPanelVisible":
+        return typeof value === "boolean";
+      default:
+        return false;
+    }
+  });
+}
+
+function settingsEqual(
+  left: AppSettingsDto,
+  right: AppSettingsDto,
+): boolean {
+  return (
+    left.colorMode === right.colorMode &&
+    left.sidebarCollapsed === right.sidebarCollapsed &&
+    left.statusPanelVisible === right.statusPanelVisible
+  );
 }
 
 function copyNotices(

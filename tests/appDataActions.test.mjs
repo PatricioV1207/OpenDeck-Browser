@@ -7,6 +7,7 @@ import {
   executeDeleteWorkspace,
   executeRenameWorkspace,
   executeSetActiveWorkspace,
+  executeUpdateSettings,
 } from "../src/state/appDataActions.ts";
 import {
   AppCommandError,
@@ -1000,6 +1001,270 @@ test("delete rejects stale canonical responses that still contain the deleted wo
   assert.equal(outcome.state, previous);
 });
 
+test("settings update replaces provider state with the canonical successful response", async () => {
+  const previous = readyState({
+    workspaces: [workspace()],
+    activeWorkspaceId: "workspace-1",
+  });
+  const patch = {
+    colorMode: "dark",
+    statusPanelVisible: false,
+  };
+  const response = {
+    data: {
+      ...previous.data,
+      settings: {
+        colorMode: "dark",
+        sidebarCollapsed: false,
+        statusPanelVisible: false,
+      },
+    },
+    notices: [
+      {
+        code: "corrupt_data_recovered",
+        message: "Validated native notice text.",
+      },
+    ],
+  };
+  const calls = [];
+
+  const outcome = await executeUpdateSettings(
+    previous,
+    patch,
+    async (receivedPatch) => {
+      calls.push(receivedPatch);
+      return response;
+    },
+  );
+
+  assert.deepEqual(calls, [patch]);
+  assert.deepEqual(outcome.result, { ok: true, outcome: "updated" });
+  assert.equal(outcome.state.status, "ready");
+  assert.equal(outcome.state.data, response.data);
+  assert.equal(outcome.state.data.workspaces, previous.data.workspaces);
+  assert.deepEqual(outcome.state.notices, response.notices);
+  assert.notEqual(outcome.state.notices, response.notices);
+  assert.notEqual(outcome.state.notices[0], response.notices[0]);
+  assert.equal(previous.data.settings.colorMode, "system");
+});
+
+test("settings update reports unchanged only from a matching canonical response", async () => {
+  const previous = readyState();
+  const response = {
+    data: {
+      ...previous.data,
+      settings: { ...previous.data.settings },
+    },
+    notices: [],
+  };
+
+  const outcome = await executeUpdateSettings(
+    previous,
+    { sidebarCollapsed: false },
+    async () => response,
+  );
+
+  assert.deepEqual(outcome.result, { ok: true, outcome: "unchanged" });
+  assert.equal(outcome.state.status, "ready");
+  assert.equal(outcome.state.data, response.data);
+});
+
+test("settings update rejects empty and unsupported patches without invoking the command", async () => {
+  const invalidPatches = [
+    {},
+    { unknownSetting: true },
+    { colorMode: "sepia" },
+    { sidebarCollapsed: "false" },
+    { statusPanelVisible: 1 },
+    null,
+    [],
+  ];
+
+  for (const patch of invalidPatches) {
+    const previous = readyState();
+    let calls = 0;
+    const outcome = await executeUpdateSettings(
+      previous,
+      patch,
+      async () => {
+        calls += 1;
+        throw new Error("command must not run");
+      },
+    );
+
+    assert.equal(calls, 0);
+    assert.equal(outcome.state, previous);
+    assert.deepEqual(outcome.result, { ok: false, code: "validation" });
+  }
+});
+
+test("settings update rejects unavailable provider state without invoking the command", async () => {
+  const states = [
+    {
+      status: "loading",
+      data: null,
+      notices: [],
+      error: null,
+    },
+    {
+      status: "error",
+      data: null,
+      notices: [],
+      error: {
+        code: "storage",
+        message: "Safe provider message.",
+      },
+    },
+  ];
+
+  for (const state of states) {
+    let calls = 0;
+    const outcome = await executeUpdateSettings(
+      state,
+      { colorMode: "light" },
+      async () => {
+        calls += 1;
+        throw new Error("command must not run");
+      },
+    );
+
+    assert.equal(calls, 0);
+    assert.equal(outcome.state, state);
+    assert.deepEqual(outcome.result, { ok: false, code: "internal" });
+  }
+});
+
+test("settings update rejects stale or over-broad canonical settings", async () => {
+  const previous = readyState();
+  const responses = [
+    {
+      data: {
+        ...previous.data,
+        settings: { ...previous.data.settings },
+      },
+      notices: [],
+    },
+    {
+      data: {
+        ...previous.data,
+        settings: {
+          colorMode: "dark",
+          sidebarCollapsed: true,
+          statusPanelVisible: true,
+        },
+      },
+      notices: [],
+    },
+  ];
+
+  for (const response of responses) {
+    const outcome = await executeUpdateSettings(
+      previous,
+      { colorMode: "dark" },
+      async () => response,
+    );
+
+    assert.deepEqual(outcome.result, { ok: false, code: "internal" });
+    assert.equal(outcome.state, previous);
+  }
+});
+
+test("settings update maps supported command failures to safe result codes", async () => {
+  const cases = [
+    ["validation", "patch", "validation"],
+    ["storage", null, "storage"],
+    ["unsupported_schema", "schemaVersion", "unsupported_schema"],
+    ["internal", null, "internal"],
+  ];
+
+  for (const [code, field, expected] of cases) {
+    const previous = readyState();
+    const outcome = await executeUpdateSettings(
+      previous,
+      { colorMode: "light" },
+      async () => {
+        throw commandError(code, field, [], "update_settings");
+      },
+    );
+
+    assert.deepEqual(outcome.result, { ok: false, code: expected });
+    assert.equal(outcome.state, previous);
+  }
+});
+
+test("settings update maps unexpected failures and mismatched errors to internal", async () => {
+  const failures = [
+    commandError("validation", "name", [], "update_settings"),
+    commandError("storage", "patch", [], "update_settings"),
+    commandError("unsupported_schema", null, [], "update_settings"),
+    commandError("not_found", "id", [], "update_settings"),
+    commandError("conflict", "patch", [], "update_settings"),
+    commandError("validation", "patch"),
+    new IpcContractError("delete_workspace", "success"),
+    new Error("/private/path/token-value"),
+    "/private/path/raw-rejection",
+  ];
+
+  for (const failure of failures) {
+    const previous = readyState();
+    const outcome = await executeUpdateSettings(
+      previous,
+      { colorMode: "light" },
+      async () => {
+        throw failure;
+      },
+    );
+
+    assert.deepEqual(outcome.result, { ok: false, code: "internal" });
+    assert.equal(outcome.state, previous);
+    assert.equal(JSON.stringify(outcome).includes("/private/path"), false);
+  }
+});
+
+test("settings update maps malformed success and error contracts to contract", async () => {
+  for (const phase of ["success", "error"]) {
+    const previous = readyState();
+    const outcome = await executeUpdateSettings(
+      previous,
+      { colorMode: "light" },
+      async () => {
+        throw new IpcContractError("update_settings", phase);
+      },
+    );
+
+    assert.deepEqual(outcome.result, { ok: false, code: "contract" });
+    assert.equal(outcome.state, previous);
+  }
+});
+
+test("settings update preserves validated failure notices without changing data", async () => {
+  const previous = readyState({
+    workspaces: [workspace()],
+    activeWorkspaceId: "workspace-1",
+  });
+  const notices = [
+    {
+      code: "corrupt_data_recovered",
+      message: "Validated but never rendered directly.",
+    },
+  ];
+
+  const outcome = await executeUpdateSettings(
+    previous,
+    { statusPanelVisible: false },
+    async () => {
+      throw commandError("storage", null, notices, "update_settings");
+    },
+  );
+
+  assert.deepEqual(outcome.result, { ok: false, code: "storage" });
+  assert.equal(outcome.state.status, "ready");
+  assert.equal(outcome.state.data, previous.data);
+  assert.deepEqual(outcome.state.notices, notices);
+  assert.notEqual(outcome.state.notices, notices);
+  assert.notEqual(outcome.state.notices[0], notices[0]);
+});
+
 test("shared mutation queue serializes operations in submission order", async () => {
   const queue = createAppDataMutationQueue();
   const events = [];
@@ -1052,7 +1317,7 @@ test("shared mutation queue continues after an operation rejects", async () => {
   assert.deepEqual(events, ["failure", "success"]);
 });
 
-test("shared mutation queue serializes create, rename, active selection, and delete work", async () => {
+test("shared mutation queue serializes workspace and settings work", async () => {
   const queue = createAppDataMutationQueue();
   const events = [];
   let releaseCreate;
@@ -1081,6 +1346,11 @@ test("shared mutation queue serializes create, rename, active selection, and del
     events.push("delete:end");
     return "deleted";
   });
+  const settings = queue.enqueue(async () => {
+    events.push("settings:start");
+    events.push("settings:end");
+    return "settings-updated";
+  });
 
   await Promise.resolve();
   assert.deepEqual(events, ["create:start"]);
@@ -1090,6 +1360,7 @@ test("shared mutation queue serializes create, rename, active selection, and del
   assert.equal(await rename, "renamed");
   assert.equal(await active, "active");
   assert.equal(await deleteWork, "deleted");
+  assert.equal(await settings, "settings-updated");
   assert.deepEqual(events, [
     "create:start",
     "create:end",
@@ -1099,5 +1370,7 @@ test("shared mutation queue serializes create, rename, active selection, and del
     "active:end",
     "delete:start",
     "delete:end",
+    "settings:start",
+    "settings:end",
   ]);
 });
