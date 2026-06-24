@@ -2,14 +2,7 @@ import type {
   AppDataLoadFailureCode,
   AppDataState,
 } from "../../state/appDataState.ts";
-import type { AppSettingsDto, ColorMode } from "../../types/appData.ts";
-
-export interface SettingPresentationRow {
-  readonly id: "color-mode" | "sidebar-presentation" | "status-panel";
-  readonly name: string;
-  readonly description: string;
-  readonly value: string;
-}
+import type { AppSettingsDto } from "../../types/appData.ts";
 
 export type SettingsPresentation =
   | {
@@ -21,7 +14,7 @@ export type SettingsPresentation =
     }
   | {
       readonly status: "ready";
-      readonly rows: readonly SettingPresentationRow[];
+      readonly settings: AppSettingsDto;
     };
 
 const SETTINGS_ERROR_MESSAGES: Record<AppDataLoadFailureCode, string> = {
@@ -32,12 +25,6 @@ const SETTINGS_ERROR_MESSAGES: Record<AppDataLoadFailureCode, string> = {
   contract:
     "Settings are unavailable because the native app data response could not be verified.",
   internal: "Settings are unavailable because local app data could not be loaded.",
-};
-
-const COLOR_MODE_LABELS: Record<ColorMode, string> = {
-  system: "System",
-  light: "Light",
-  dark: "Dark",
 };
 
 export function createSettingsPresentation(
@@ -56,34 +43,6 @@ export function createSettingsPresentation(
 
   return {
     status: "ready",
-    rows: createSettingRows(state.data.settings),
+    settings: { ...state.data.settings },
   };
-}
-
-function createSettingRows(
-  settings: AppSettingsDto,
-): readonly SettingPresentationRow[] {
-  return [
-    {
-      id: "color-mode",
-      name: "Color mode",
-      description:
-        "Stored appearance preference. The interface does not apply this value yet.",
-      value: COLOR_MODE_LABELS[settings.colorMode],
-    },
-    {
-      id: "sidebar-presentation",
-      name: "Sidebar presentation",
-      description:
-        "Stored sidebar preference. Responsive layout behavior remains unchanged.",
-      value: settings.sidebarCollapsed ? "Collapsed" : "Expanded",
-    },
-    {
-      id: "status-panel",
-      name: "Status panel",
-      description:
-        "Stored visibility preference. The status panel remains visible in this step.",
-      value: settings.statusPanelVisible ? "Visible" : "Hidden",
-    },
-  ];
 }

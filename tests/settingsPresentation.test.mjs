@@ -76,70 +76,19 @@ test("maps provider failure codes to fixed Settings-owned messages", () => {
   }
 });
 
-test("maps every color mode to a human-readable label", () => {
-  const cases = [
-    ["system", "System"],
-    ["light", "Light"],
-    ["dark", "Dark"],
-  ];
+test("maps ready state to a copied canonical settings snapshot", () => {
+  const settings = {
+    colorMode: "dark",
+    sidebarCollapsed: true,
+    statusPanelVisible: false,
+  };
+  const presentation = createSettingsPresentation(readyState(settings));
 
-  for (const [colorMode, expectedValue] of cases) {
-    const presentation = createSettingsPresentation(
-      readyState({
-        colorMode,
-        sidebarCollapsed: false,
-        statusPanelVisible: true,
-      }),
-    );
-
-    assert.equal(presentation.status, "ready");
-    assert.equal(presentation.rows[0].value, expectedValue);
-  }
-});
-
-test("maps boolean settings to explicit presentation labels", () => {
-  const collapsedAndHidden = createSettingsPresentation(
-    readyState({
-      colorMode: "light",
-      sidebarCollapsed: true,
-      statusPanelVisible: false,
-    }),
-  );
-  const expandedAndVisible = createSettingsPresentation(
-    readyState({
-      colorMode: "light",
-      sidebarCollapsed: false,
-      statusPanelVisible: true,
-    }),
-  );
-
-  assert.deepEqual(
-    collapsedAndHidden.rows.map((row) => row.value),
-    ["Light", "Collapsed", "Hidden"],
-  );
-  assert.deepEqual(
-    expandedAndVisible.rows.map((row) => row.value),
-    ["Light", "Expanded", "Visible"],
-  );
-});
-
-test("keeps stored preference rows in a stable order", () => {
-  const presentation = createSettingsPresentation(
-    readyState({
-      colorMode: "system",
-      sidebarCollapsed: false,
-      statusPanelVisible: true,
-    }),
-  );
-
-  assert.deepEqual(
-    presentation.rows.map(({ id, name }) => ({ id, name })),
-    [
-      { id: "color-mode", name: "Color mode" },
-      { id: "sidebar-presentation", name: "Sidebar presentation" },
-      { id: "status-panel", name: "Status panel" },
-    ],
-  );
+  assert.deepEqual(presentation, {
+    status: "ready",
+    settings,
+  });
+  assert.notEqual(presentation.settings, settings);
 });
 
 test("does not retain notices in the ready presentation", () => {

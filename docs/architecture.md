@@ -89,9 +89,8 @@ The app-data IPC boundary is implemented under `types` and `services/tauri`:
 exposes a guarded data context with `loading`, `ready`, and `error` states, and
 exposes a separate action context containing `createWorkspace(name)`,
 `renameWorkspace(id, name)`, `setActiveWorkspace(id)`, and
-`deleteWorkspace(id)`. The action context also exposes a disconnected
-`updateSettings(patch)` boundary; Settings controls and visual application
-remain deferred.
+`deleteWorkspace(id)` and `updateSettings(patch)`. Settings uses only that
+provider action for explicit saves; visual application remains deferred.
 The provider stores the canonical `AppDataDto` snapshot and validated notices
 in React memory. A module-scoped single-flight promise ensures React Strict
 Mode remounts share one startup request per JavaScript application runtime.
@@ -125,15 +124,17 @@ provider response. Projects does not import the Tauri service or call `invoke`
 directly.
 
 Settings maps the provider state into fixed loading, error, and ready
-presentations. Ready values show the stored color mode, sidebar presentation,
-and status-panel visibility with human-readable text. Settings does not render
-provider error messages or notices and does not import the Tauri service,
-expose commands, or mutate provider state.
+presentations. Its explicit-save form keeps an in-memory draft for the stored
+color mode, sidebar presentation, and status-panel visibility, then sends only
+changed fields through the provider action. It disables duplicate submissions,
+installs no optimistic provider state, maps result codes to fixed Settings-owned
+copy, and never renders provider error messages or notices. Settings does not
+import the Tauri service or call `invoke` directly.
 
-The displayed `colorMode`, `sidebarCollapsed`, and `statusPanelVisible` values
-are not applied to the interface yet. Future frontend state work will connect
-approved mutations and application behavior without bypassing the typed
-service boundary.
+The stored `colorMode`, `sidebarCollapsed`, and `statusPanelVisible` values are
+editable but are not applied to the interface yet. A separately approved step
+will connect canonical provider values to presentation behavior without
+bypassing the typed service boundary.
 
 React context and reducers are sufficient for the foundation. A third-party
 state-management library is not required.
@@ -296,9 +297,8 @@ cross-feature state belongs in `state`, and IPC access belongs exclusively in
 
 ## Next implementation order
 
-1. Connect approved non-sensitive settings mutations to Settings.
-2. Apply approved stored presentation settings during bootstrap.
-3. Replace the bootstrap-only status text with bounded session status state.
+1. Apply approved stored presentation settings during bootstrap.
+2. Replace the bootstrap-only status text with bounded session status state.
 
 ## Deferred decisions
 

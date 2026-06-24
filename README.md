@@ -11,9 +11,9 @@ The repository currently contains the foundation build:
 - A React and TypeScript application layout built with Vite.
 - Separate sidebar, top bar, workspace, tab strip, and status components.
 - Frontend-only singleton tabs that reset when the application restarts.
-- Read-only Home and Settings views, a Projects view with metadata-only
-  create, rename, active-selection, and delete controls, and a structured
-  About view.
+- A read-only Home view, explicit-save controls for non-sensitive stored
+  settings, a Projects view with metadata-only create, rename,
+  active-selection, and delete controls, and a structured About view.
 - A Rust-owned, schema-versioned app-data domain for non-sensitive settings and
   metadata-only workspaces.
 - Strict JSON storage under the operating-system application-config directory,
@@ -22,8 +22,8 @@ The repository currently contains the foundation build:
 - Seven narrow Tauri commands with safe DTOs, notices, and error codes.
 - Typed frontend service wrappers that validate every unknown IPC response.
 - A React app-data provider that loads the validated snapshot once during
-  startup, keeps it in memory, and exposes narrow workspace create, rename,
-  active-selection, and delete actions through a shared mutation queue.
+  startup, keeps it in memory, and exposes narrow workspace and settings
+  actions through a shared mutation queue.
 - A restrictive Content Security Policy and an empty main-window capability.
 
 The frontend loads app data, reports a safe startup status, summarizes the
@@ -33,9 +33,10 @@ preferences in Settings. Projects also supports inline metadata-only workspace
 rename, manual active selection, and explicit-confirmation metadata deletion
 from the canonical provider snapshot. Deleting a workspace removes only local
 workspace metadata; it does not delete repositories, folders, files,
-credentials, or remote data. The app does not apply or update persisted
-settings. Settings editing and application, live repository data, GitHub, and
-AI features remain deferred.
+credentials, or remote data. Settings can update only the three approved
+non-sensitive stored preferences through an explicit Save action. The app does
+not apply those preferences to its interface yet. Settings application, live
+repository data, GitHub, and AI features remain deferred.
 See [`docs/mvp.md`](docs/mvp.md) for the planned MVP scope.
 
 ## Prerequisites

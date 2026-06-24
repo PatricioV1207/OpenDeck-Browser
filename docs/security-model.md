@@ -79,12 +79,12 @@ permission.
 - Do not retain malformed raw IPC values in frontend errors.
 
 The React app-data provider calls the `load_app_data` wrapper during startup
-and exposes approved workspace mutations plus a disconnected `updateSettings`
-action through a separate action context. Results are reduced to validated
-in-memory data, fixed safe failure categories, and validated notice codes. A
-single-flight promise prevents duplicate startup invokes during React Strict
-Mode remounts, and one shared queue serializes workspace and settings
-operations. Settings controls and visual application remain deferred.
+and exposes approved workspace mutations plus `updateSettings` through a
+separate action context. Results are reduced to validated in-memory data, fixed
+safe failure categories, and validated notice codes. A single-flight promise
+prevents duplicate startup invokes during React Strict Mode remounts, and one
+shared queue serializes workspace and settings operations. Settings uses the
+provider action for explicit saves; visual application remains deferred.
 
 Home consumes only the provider state. Its read-only presentation maps safe
 provider failure codes to fixed Home-owned text, ignores notices and backend
@@ -106,10 +106,10 @@ frontend-owned text and never renders backend messages, rejected values, notice
 text, paths, diagnostics, or command details. It requests no repository,
 folder, path, credential, or remote-account data.
 
-Settings also consumes only the provider state. Its read-only presentation maps
-safe provider failure codes to fixed Settings-owned text, ignores notices and
-backend messages, and displays only the three approved non-sensitive settings.
-It exposes no commands, controls, links, or retry behavior, and it does not
+Settings consumes only provider state and its narrow `updateSettings` action.
+Its form edits only the three approved non-sensitive settings, submits minimal
+patches explicitly, and maps failures to fixed Settings-owned text. It ignores
+notice and backend message text, exposes no raw command boundary, and does not
 apply stored values to the interface.
 
 ### App-data persistence
@@ -218,18 +218,17 @@ The Step 23 app-data boundary was audited with these findings:
 - No remote content, external-link behavior, GitHub implementation, or AI
   implementation exists.
 - React accesses typed app-data wrappers only through `AppDataProvider`.
-- The provider exposes only the approved `create_workspace`,
-  `rename_workspace`, `set_active_workspace`, and `delete_workspace`
-  mutations to React and installs only validated canonical responses.
+- The provider exposes only approved workspace mutations and
+  `update_settings` to React and installs only validated canonical responses.
 - Home reads the validated snapshot from `AppDataProvider` and presents a safe
   summary without controls or mutation behavior.
 - Projects creates, renames, selects active, and deletes metadata-only
   workspaces through `AppDataProvider` and presents returned canonical
   metadata.
-- Settings reads validated non-sensitive preferences from `AppDataProvider`
-  and presents them without editing or application behavior.
-- Repository or filesystem deletion and all settings mutations remain
-  disconnected from React components.
+- Settings edits only the three approved non-sensitive preferences through
+  `AppDataProvider` and explicit minimal-patch saves.
+- Repository or filesystem deletion remains unavailable, and settings
+  application remains disconnected from React layout components.
 - Persisted presentation settings are loaded but are not applied to the UI.
 
 ## Requirements before GitHub integration
