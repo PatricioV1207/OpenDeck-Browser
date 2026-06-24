@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useAppDataActions } from "../../state/AppDataProvider";
 import type { WorkspaceDto } from "../../types/appData";
 import {
@@ -16,16 +16,27 @@ export function CreateWorkspaceForm({
   workspaces: readonly WorkspaceDto[];
 }) {
   const { createWorkspace } = useAppDataActions();
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [focusNameAfterSubmit, setFocusNameAfterSubmit] = useState(false);
   const submissionInFlightRef = useRef(false);
 
   const describedBy = fieldError === null
     ? NAME_HELP_ID
     : `${NAME_HELP_ID} ${NAME_ERROR_ID}`;
+
+  useEffect(() => {
+    if (!focusNameAfterSubmit || submitting) {
+      return;
+    }
+
+    nameInputRef.current?.focus();
+    setFocusNameAfterSubmit(false);
+  }, [focusNameAfterSubmit, submitting]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -39,6 +50,7 @@ export function CreateWorkspaceForm({
       setFieldError(validation.message);
       setSubmissionError(null);
       setSuccessMessage(null);
+      nameInputRef.current?.focus();
       return;
     }
 
@@ -54,10 +66,12 @@ export function CreateWorkspaceForm({
       if (result.ok) {
         setName("");
         setSuccessMessage("Workspace created and set as active.");
+        setFocusNameAfterSubmit(true);
         return;
       }
 
       setSubmissionError(getCreateWorkspaceFailureMessage(result.code));
+      setFocusNameAfterSubmit(true);
     } finally {
       submissionInFlightRef.current = false;
       setSubmitting(false);
@@ -92,6 +106,7 @@ export function CreateWorkspaceForm({
         <div className="workspace-create__field">
           <label htmlFor={NAME_INPUT_ID}>Workspace name</label>
           <input
+            ref={nameInputRef}
             id={NAME_INPUT_ID}
             name="workspaceName"
             type="text"
